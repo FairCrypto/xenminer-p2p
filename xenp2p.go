@@ -327,6 +327,7 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 }
 
 func initNode() {
+	log.Println("Initializing node cfg and DB")
 	path := ".node"
 	// check if dir doesn't exist; if no, create it
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
@@ -335,6 +336,7 @@ func initNode() {
 			log.Println(err)
 		}
 	}
+	log.Println("Created dir")
 	path = ".node/blockchain.db"
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		db, err := sql.Open("sqlite3", path)
@@ -349,6 +351,7 @@ func initNode() {
 		if err != nil {
 			log.Fatal("Error closing DB: ", err)
 		}
+		log.Println("Created DB")
 	}
 }
 
