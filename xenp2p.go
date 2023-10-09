@@ -196,8 +196,8 @@ func prepareBootstrapAddresses(path string) []string {
 		return item != ""
 	}
 	bootstrapHosts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_HOSTS"), ","), notEmpty)
-	bootstrapPorts := strings.Split(os.Getenv("BOOTSTRAP_PORTS"), ",")
-	bootstrapPeers := strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ",")
+	bootstrapPorts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PORTS"), ","), notEmpty)
+	bootstrapPeers := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ","), notEmpty)
 
 	destinations := make([]string, len(bootstrapPeers))
 	for i, peerId := range bootstrapPeers {
