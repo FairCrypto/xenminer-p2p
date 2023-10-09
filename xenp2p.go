@@ -158,6 +158,14 @@ func loadPeerParams(path string) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 	if err != nil {
 		log.Fatal("Error when opening file: ", err)
 	}
+	err = godotenv.Load(path + "/.env")
+	if err != nil {
+		log.Fatal("Error loading ENV: ", err)
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10330"
+	}
 
 	// Now let's unmarshall the data into `peerId`
 	var peerId PeerId
@@ -167,7 +175,7 @@ func loadPeerParams(path string) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 	}
 	log.Println("PeerId: ", peerId.Id)
 
-	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", 10331))
+	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", port))
 	if err != nil {
 		log.Fatal("Error making address: ", err)
 	}
