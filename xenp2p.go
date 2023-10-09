@@ -225,6 +225,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	*pubsub.Subscription,
 	*pubsub.Subscription,
 	*pubsub.Topic,
+	*pubsub.Topic,
 ) {
 	blockHeightTopic, err := ps.Join("block_height")
 	if err != nil {
@@ -252,7 +253,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	if err != nil {
 		log.Fatal("Error subscribing to topic", err)
 	}
-	return blockHeightSub, dataSub, getSub, getTopic
+	return blockHeightSub, dataSub, getSub, blockHeightTopic, getTopic
 }
 
 func setupDB(path string) *sql.DB {
@@ -356,6 +357,26 @@ func checkPubsubPeers(ps *pubsub.PubSub, t time.Ticker, quit <-chan struct{}) {
 	}
 }
 
+func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time.Ticker, quit <-chan struct{}) {
+	for {
+		select {
+		case <-t.C:
+			maxHeight := getCurrentHeight(db)
+			bytes, err := json.Marshal(maxHeight)
+			if err != nil {
+				log.Fatal("Error converting block_height", err)
+			}
+			err = topic.Publish(ctx, bytes)
+			if err != nil {
+				log.Fatal("Error publishing message", err)
+			}
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+}
+
 func initNode() {
 	log.Println("Initializing node cfg and DB")
 	path := ".node"
@@ -430,7 +451,7 @@ func main() {
 	log.Println("Started: ", peerId)
 
 	// subscribe to essential topics
-	blockHeightSub, dataSub, getSub, getTopic := subscribeToTopics(ps)
+	blockHeightSub, dataSub, getSub, blockHeightTopic, getTopic := subscribeToTopics(ps)
 
 	// spawn message processing by topics
 	go processBlockHeight(ctx, blockHeightSub, getTopic, db)
@@ -438,9 +459,11 @@ func main() {
 	go processGet(ctx, getSub)
 
 	// check / renew connections periodically
-	ticker := time.NewTicker(5 * time.Second)
-	go checkConnections(ctx, h, destinations, *ticker, make(chan struct{}))
-	go checkPubsubPeers(ps, *ticker, make(chan struct{}))
+	every5Seconds := time.NewTicker(5 * time.Second)
+	everySecond := time.NewTicker(1 * time.Second)
+	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
+	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
+	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
 
 	// wait until interrupted
 	select {}
