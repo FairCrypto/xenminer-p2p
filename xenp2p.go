@@ -328,12 +328,26 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 			peers := h.Peerstore().Peers()
-			log.Println(peers)
 			for _, addr := range destinations {
 				if !hasPeer(peers, addr) {
 					connectToPeer(ctx, h, addr)
 				}
 			}
+
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+}
+
+func checkPubsubPeers(ps *pubsub.PubSub, t time.Ticker, quit <-chan struct{}) {
+	for {
+		select {
+		case <-t.C:
+			// check if peer is not connected and try to reconnect
+			peers := ps.ListPeers("block_height")
+			log.Println("PEERS", peers)
 
 		case <-quit:
 			t.Stop()
@@ -426,6 +440,7 @@ func main() {
 	// check / renew connections periodically
 	ticker := time.NewTicker(5 * time.Second)
 	go checkConnections(ctx, h, destinations, *ticker, make(chan struct{}))
+	go checkPubsubPeers(ps, *ticker, make(chan struct{}))
 
 	// wait until interrupted
 	select {}
