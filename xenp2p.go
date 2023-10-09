@@ -358,14 +358,14 @@ func initNode() {
 func main() {
 
 	init := flag.Bool("init", false, "init node")
+	configPath := flag.String("config", ".node", "path to config file")
+	flag.Parse()
 
 	if *init {
 		initNode()
 		os.Exit(0)
 	}
 
-	configPath := flag.String("config", ".node", "path to config file")
-	flag.Parse()
 	log.Println("Loading config from", *configPath)
 
 	// setup DB and check / init table(s)
