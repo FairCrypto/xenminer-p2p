@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
@@ -267,6 +268,7 @@ func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 	h, err := libp2p.New(
 		libp2p.ListenAddrs(addr),
 		libp2p.Identity(privKey),
+		libp2p.Security(noise.ID, noise.New),
 	)
 	if err != nil {
 		log.Fatal("Error starting Peer: ", err)
