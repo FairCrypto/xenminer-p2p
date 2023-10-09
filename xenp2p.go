@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/joho/godotenv"
@@ -325,7 +326,40 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 	}
 }
 
+func initNode() {
+	path := ".node"
+	// check if dir doesn't exist; if no, create it
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	path = ".node/blockchain.db"
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		db, err := sql.Open("sqlite3", path)
+		if err != nil {
+			log.Fatal("Error when opening DB file: ", err)
+		}
+		_, err = db.Exec("VACUUM;")
+		if err != nil {
+			log.Fatal("Error when init DB file: ", err)
+		}
+		err = db.Close()
+		if err != nil {
+			log.Fatal("Error closing DB: ", err)
+		}
+	}
+}
+
 func main() {
+
+	init := flag.Bool("init", false, "init node")
+
+	if *init {
+		initNode()
+		os.Exit(0)
+	}
 
 	configPath := flag.String("config", ".node", "path to config file")
 	flag.Parse()
