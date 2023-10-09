@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/samber/lo"
 	"log"
 	"math"
 	"os"
@@ -191,7 +192,10 @@ func prepareBootstrapAddresses(path string) []string {
 	if err != nil {
 		log.Fatal("Error loading ENV: ", err)
 	}
-	bootstrapHosts := strings.Split(os.Getenv("BOOTSTRAP_HOSTS"), ",")
+	notEmpty := func(item string, index int) bool {
+		return item != ""
+	}
+	bootstrapHosts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_HOSTS"), ","), notEmpty)
 	bootstrapPorts := strings.Split(os.Getenv("BOOTSTRAP_PORTS"), ",")
 	bootstrapPeers := strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ",")
 
