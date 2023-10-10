@@ -98,12 +98,12 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 		msg, err := getSub.Next(ctx)
 		// TODO: check and process only messages coming from other nodes, not our own
 		if err != nil {
-			log.Fatal("Error getting message", err)
+			log.Fatal("Error getting want message: ", err)
 		}
 		var blockIds []uint
 		err = json.Unmarshal(msg.Data, &blockIds)
 		if err != nil {
-			log.Fatal("Error converting message", err)
+			log.Fatal("Error converting want message: ", err)
 		}
 		log.Println("WANT block_id(s):", blockIds)
 		for _, blockId := range blockIds {
@@ -125,11 +125,11 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 			}
 			bytes, err := json.Marshal(block)
 			if err != nil {
-				log.Fatal("Error converting block", err)
+				log.Fatal("Error converting block to data: ", err)
 			}
 			err = dataTopic.Publish(ctx, bytes)
 			if err != nil {
-				log.Fatal("Error publishing message", err)
+				log.Fatal("Error publishing data message: ", err)
 			}
 			log.Println("SENT", blockId)
 		}
@@ -140,12 +140,12 @@ func processData(ctx context.Context, dataSub *pubsub.Subscription, db *sql.DB) 
 	for {
 		msg, err := dataSub.Next(ctx)
 		if err != nil {
-			log.Fatal("Error getting message", err)
+			log.Fatal("Error getting data message: ", err)
 		}
 		var blocks Blocks
 		err = json.Unmarshal(msg.Data, &blocks)
 		if err != nil {
-			log.Fatal("Error converting message", err)
+			log.Fatal("Error converting data message: ", err)
 		}
 		for _, block := range blocks {
 			log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
