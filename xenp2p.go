@@ -111,27 +111,21 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 			if err != nil {
 				log.Fatal("Error when opening DB: ", err)
 			}
-			var block DbBlock
-			// var id string
-			// var timeStamp string
-			// var prevHash string
-			// var merkleRoot string
-			// var recordsJson string
-			// var blockHash string
+			var block Block
 			err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
-			// err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
-			if err != nil {
-				log.Fatal("Error retrieving data from DB: ", err)
+			// ignoring the error which might result from missing blocks
+			if err == nil {
+				blocks := []Block{block}
+				bytes, err := json.Marshal(blocks)
+				if err != nil {
+					log.Fatal("Error converting block to data: ", err)
+				}
+				err = dataTopic.Publish(ctx, bytes)
+				if err != nil {
+					log.Fatal("Error publishing data message: ", err)
+				}
+				log.Println("SENT", blockId)
 			}
-			bytes, err := json.Marshal(block)
-			if err != nil {
-				log.Fatal("Error converting block to data: ", err)
-			}
-			err = dataTopic.Publish(ctx, bytes)
-			if err != nil {
-				log.Fatal("Error publishing data message: ", err)
-			}
-			log.Println("SENT", blockId)
 		}
 	}
 }
