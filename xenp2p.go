@@ -57,6 +57,7 @@ type Height struct {
 type Blocks []Block
 
 func processBlockHeight(
+	peerId string,
 	ctx context.Context,
 	blockHeightSub *pubsub.Subscription,
 	getTopic *pubsub.Topic,
@@ -64,6 +65,9 @@ func processBlockHeight(
 ) {
 	for {
 		msg, err := blockHeightSub.Next(ctx)
+		if msg.ReceivedFrom.String() == peerId {
+			continue
+		}
 		if err != nil {
 			log.Fatal("Error getting message", err)
 		}
@@ -93,10 +97,18 @@ func processBlockHeight(
 	}
 }
 
-func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pubsub.Topic, db *sql.DB) {
+func processGet(
+	peerId string,
+	ctx context.Context,
+	getSub *pubsub.Subscription,
+	dataTopic *pubsub.Topic,
+	db *sql.DB,
+) {
 	for {
 		msg, err := getSub.Next(ctx)
-		// TODO: check and process only messages coming from other nodes, not our own
+		if msg.ReceivedFrom.String() == peerId {
+			continue
+		}
 		if err != nil {
 			log.Fatal("Error getting want message: ", err)
 		}
@@ -124,7 +136,7 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 				if err != nil {
 					log.Fatal("Error publishing data message: ", err)
 				}
-				log.Println("SENT", blockId)
+				// log.Println("SENT", blockId)
 			} else {
 				err = nil
 			}
@@ -132,9 +144,17 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 	}
 }
 
-func processData(ctx context.Context, dataSub *pubsub.Subscription, db *sql.DB) {
+func processData(
+	peerId string,
+	ctx context.Context,
+	dataSub *pubsub.Subscription,
+	db *sql.DB,
+) {
 	for {
 		msg, err := dataSub.Next(ctx)
+		if msg.ReceivedFrom.String() == peerId {
+			continue
+		}
 		if err != nil {
 			log.Fatal("Error getting data message: ", err)
 		}
@@ -487,9 +507,9 @@ func main() {
 	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
 
 	// spawn message processing by topics
-	go processBlockHeight(ctx, blockHeightSub, getTopic, db)
-	go processData(ctx, dataSub, db)
-	go processGet(ctx, getSub, dataTopic, db)
+	go processBlockHeight(peerId, ctx, blockHeightSub, getTopic, db)
+	go processData(peerId, ctx, dataSub, db)
+	go processGet(peerId, ctx, getSub, dataTopic, db)
 
 	// check / renew connections periodically
 	every5Seconds := time.NewTicker(5 * time.Second)
