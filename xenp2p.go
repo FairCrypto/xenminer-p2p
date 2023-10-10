@@ -84,19 +84,31 @@ func processBlockHeight(
 	}
 }
 
-func processGet(ctx context.Context, getSub *pubsub.Subscription) {
+func processGet(ctx context.Context, getSub *pubsub.Subscription, db *sql.DB) {
 	for {
 		msg, err := getSub.Next(ctx)
 		// TODO: check and process only messages coming from other nodes, not our own
 		if err != nil {
 			log.Fatal("Error getting message", err)
 		}
-		var message []uint
-		err = json.Unmarshal(msg.Data, &message)
+		var blockIds []uint
+		err = json.Unmarshal(msg.Data, &blockIds)
 		if err != nil {
 			log.Fatal("Error converting message", err)
 		}
-		log.Println("WANT block_id(s):", message)
+		log.Println("WANT block_id(s):", blockIds)
+		for _, blockId := range blockIds {
+			row := db.QueryRow(getRowBlockchainSql, fmt.Sprintf("%d", blockId))
+			if err != nil {
+				log.Fatal("Error when opening DB: ", err)
+			}
+			var block Block
+			err = row.Scan(&block)
+			if err != nil {
+				log.Fatal("Error retrieving data from DB: ", err)
+			}
+			log.Println(block)
+		}
 	}
 }
 
@@ -456,7 +468,7 @@ func main() {
 	// spawn message processing by topics
 	go processBlockHeight(ctx, blockHeightSub, getTopic, db)
 	go processData(ctx, dataSub, db)
-	go processGet(ctx, getSub)
+	go processGet(ctx, getSub, db)
 
 	// check / renew connections periodically
 	every5Seconds := time.NewTicker(5 * time.Second)
