@@ -311,7 +311,17 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 }
 
 func setupDB(path string) *sql.DB {
-	db, err := sql.Open("sqlite3", path+"/blockchain.db")
+	err := godotenv.Load(path + "/.env")
+	var dbPath = ""
+	if err != nil {
+		err = nil
+	}
+	dbPath = os.Getenv("DB_LOCATION")
+	if dbPath == "" {
+		dbPath = path + "/blockchain.db"
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Error when opening DB file: ", err)
 	}
