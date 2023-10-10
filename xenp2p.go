@@ -84,7 +84,7 @@ func processBlockHeight(
 	}
 }
 
-func processGet(ctx context.Context, getSub *pubsub.Subscription, db *sql.DB) {
+func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pubsub.Topic, db *sql.DB) {
 	for {
 		msg, err := getSub.Next(ctx)
 		// TODO: check and process only messages coming from other nodes, not our own
@@ -103,11 +103,25 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, db *sql.DB) {
 				log.Fatal("Error when opening DB: ", err)
 			}
 			var block Block
-			err = row.Scan(&block)
+			// var id string
+			// var timeStamp string
+			// var prevHash string
+			// var merkleRoot string
+			// var recordsJson string
+			// var blockHash string
+			err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
 			if err != nil {
 				log.Fatal("Error retrieving data from DB: ", err)
 			}
-			log.Println(block)
+			bytes, err := json.Marshal(block)
+			if err != nil {
+				log.Fatal("Error converting block", err)
+			}
+			err = dataTopic.Publish(ctx, bytes)
+			if err != nil {
+				log.Fatal("Error publishing message", err)
+			}
+			log.Println("SENT", blockId)
 		}
 	}
 }
@@ -238,6 +252,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	*pubsub.Subscription,
 	*pubsub.Topic,
 	*pubsub.Topic,
+	*pubsub.Topic,
 ) {
 	blockHeightTopic, err := ps.Join("block_height")
 	if err != nil {
@@ -265,7 +280,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	if err != nil {
 		log.Fatal("Error subscribing to topic", err)
 	}
-	return blockHeightSub, dataSub, getSub, blockHeightTopic, getTopic
+	return blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic
 }
 
 func setupDB(path string) *sql.DB {
@@ -463,12 +478,12 @@ func main() {
 	log.Println("Started: ", peerId)
 
 	// subscribe to essential topics
-	blockHeightSub, dataSub, getSub, blockHeightTopic, getTopic := subscribeToTopics(ps)
+	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
 
 	// spawn message processing by topics
 	go processBlockHeight(ctx, blockHeightSub, getTopic, db)
 	go processData(ctx, dataSub, db)
-	go processGet(ctx, getSub, db)
+	go processGet(ctx, getSub, dataTopic, db)
 
 	// check / renew connections periodically
 	every5Seconds := time.NewTicker(5 * time.Second)
