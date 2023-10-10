@@ -24,4 +24,11 @@ const (
 	getRowBlockchainSql string = `
 		SELECT * FROM blockchain WHERE id = ?;
 	`
+
+	getMissingRowIdsBlockchainSql = `
+		select id+1 from blockchain bo 
+		where not exists (
+			select null from blockchain bi where bi.id = bo.id + 1
+		) group by id limit 10	
+	`
 )

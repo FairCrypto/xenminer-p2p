@@ -441,6 +441,41 @@ func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB, 
 	}
 }
 
+func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time.Ticker, quit <-chan struct{}) {
+	for {
+		select {
+		case <-t.C:
+			rows, err := db.Query(getMissingRowIdsBlockchainSql)
+			if err != nil {
+				log.Fatal("Error when opening DB: ", err)
+			}
+			var blockId uint
+			defer func(rows *sql.Rows) {
+				err := rows.Close()
+				if err != nil {
+					log.Fatal("Error when closing DB: ", err)
+				}
+			}(rows)
+			var blocks []uint
+			for rows.Next() {
+				err = rows.Scan(&blockId)
+				blocks = append(blocks, blockId)
+			}
+			bytes, err := json.Marshal(blocks)
+			if err != nil {
+				log.Fatal("Error converting block_id: ", err)
+			}
+			err = topic.Publish(ctx, bytes)
+			if err != nil {
+				log.Fatal("Error publishing message: ", err)
+			}
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+}
+
 func initNode() {
 	log.Println("Initializing node cfg and DB")
 	path := ".node"
@@ -524,9 +559,11 @@ func main() {
 
 	// check / renew connections periodically
 	every5Seconds := time.NewTicker(5 * time.Second)
-	everySecond := time.NewTicker(1 * time.Second)
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
+	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
+
+	everySecond := time.NewTicker(1 * time.Second)
 	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
 
 	// wait until interrupted
