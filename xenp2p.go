@@ -41,6 +41,15 @@ type Block struct {
 	BlockHash   string `json:"block_hash"`
 }
 
+type DbBlock struct {
+	Id          sql.NullInt32  `json:"id"`
+	Timestamp   sql.NullString `json:"timestamp"`
+	PrevHash    sql.NullString `json:"prev_hash"`
+	MerkleRoot  sql.NullString `json:"merkle_root"`
+	RecordsJson sql.NullString `json:"records_json"`
+	BlockHash   sql.NullString `json:"block_hash"`
+}
+
 type Height struct {
 	Max sql.NullInt32 `json:"max_height"`
 }
@@ -102,7 +111,7 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 			if err != nil {
 				log.Fatal("Error when opening DB: ", err)
 			}
-			var block Block
+			var block DbBlock
 			// var id string
 			// var timeStamp string
 			// var prevHash string
@@ -110,6 +119,7 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 			// var recordsJson string
 			// var blockHash string
 			err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
+			// err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
 			if err != nil {
 				log.Fatal("Error retrieving data from DB: ", err)
 			}
