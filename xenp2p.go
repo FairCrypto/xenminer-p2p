@@ -125,6 +125,8 @@ func processGet(ctx context.Context, getSub *pubsub.Subscription, dataTopic *pub
 					log.Fatal("Error publishing data message: ", err)
 				}
 				log.Println("SENT", blockId)
+			} else {
+				err = nil
 			}
 		}
 	}
