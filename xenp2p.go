@@ -138,6 +138,7 @@ func processGet(
 				}
 				// log.Println("SENT", blockId)
 			} else {
+				log.Println("!BLOCK", blockId)
 				err = nil
 			}
 		}
