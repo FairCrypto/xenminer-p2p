@@ -117,7 +117,7 @@ func processGet(
 			}
 			var block Block
 			err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
-			// ignoring the error which might result from missing blocks
+			// NB: ignoring the error which might result from missing blocks
 			if err == nil {
 				blocks := []Block{block}
 				bytes, err := json.Marshal(blocks)
@@ -158,6 +158,30 @@ func processData(
 		}
 		for _, block := range blocks {
 			log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
+			if block.Id > 1 {
+				prevRow := db.QueryRow(getRowBlockchainSql, fmt.Sprintf("%d", block.Id-1))
+				if err != nil {
+					log.Println("Error when querying DB: ", err)
+					continue
+				}
+				var prevBlock Block
+				err = prevRow.Scan(
+					&prevBlock.Id,
+					&prevBlock.Timestamp,
+					&prevBlock.PrevHash,
+					&prevBlock.MerkleRoot,
+					&prevBlock.RecordsJson,
+					&prevBlock.BlockHash,
+				)
+				if err != nil {
+					log.Println("Error when processing row: ", err)
+					continue
+				}
+				if prevBlock.BlockHash != block.PrevHash {
+					log.Println("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+					continue
+				}
+			}
 			_, err = db.Exec(
 				insertBlockchainSql,
 				block.Id,
