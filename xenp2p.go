@@ -217,7 +217,7 @@ func getCurrentHeight(db *sql.DB) uint {
 	rows.Next()
 	err = rows.Scan(&height.Max)
 	if err != nil {
-		log.Fatal("Error retrieving data from DB: ", err)
+		log.Println("Error retrieving data from DB: ", err)
 	}
 	if height.Max.Valid {
 		return uint(height.Max.Int32)
@@ -465,6 +465,7 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 	for {
 		select {
 		case <-t.C:
+			currentHeight := getCurrentHeight(db)
 			rows, err := db.Query(getMissingRowIdsBlockchainSql)
 			if err != nil {
 				log.Fatal("Error when opening DB: ", err)
@@ -479,15 +480,20 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 			var blocks []uint
 			for rows.Next() {
 				err = rows.Scan(&blockId)
-				blocks = append(blocks, blockId)
+				if blockId != currentHeight+1 {
+					// avoid repeatedly asking for next block if the DB is synced
+					blocks = append(blocks, blockId)
+				}
 			}
-			bytes, err := json.Marshal(blocks)
-			if err != nil {
-				log.Fatal("Error converting block_id: ", err)
-			}
-			err = topic.Publish(ctx, bytes)
-			if err != nil {
-				log.Fatal("Error publishing message: ", err)
+			if len(blocks) > 0 {
+				bytes, err := json.Marshal(blocks)
+				if err != nil {
+					log.Fatal("Error converting block_id: ", err)
+				}
+				err = topic.Publish(ctx, bytes)
+				if err != nil {
+					log.Fatal("Error publishing message: ", err)
+				}
 			}
 		case <-quit:
 			t.Stop()
