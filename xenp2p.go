@@ -88,6 +88,9 @@ func processBlockHeight(
 				log.Fatal("Error publishing message", err)
 			}
 		}
+		if blockchainHeight == localHeight {
+			log.Println("IN SYNC", localHeight, "=", blockchainHeight)
+		}
 	}
 }
 
