@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -39,15 +40,6 @@ type Block struct {
 	MerkleRoot  string `json:"merkle_root"`
 	RecordsJson string `json:"records_json"`
 	BlockHash   string `json:"block_hash"`
-}
-
-type DbBlock struct {
-	Id          sql.NullInt32  `json:"id"`
-	Timestamp   sql.NullString `json:"timestamp"`
-	PrevHash    sql.NullString `json:"prev_hash"`
-	MerkleRoot  sql.NullString `json:"merkle_root"`
-	RecordsJson sql.NullString `json:"records_json"`
-	BlockHash   sql.NullString `json:"block_hash"`
 }
 
 type Height struct {
@@ -502,6 +494,32 @@ func initNode() {
 			log.Fatal("Error closing DB: ", err)
 		}
 		log.Println("Created DB")
+	}
+
+	path = ".node/peer.json"
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
+		if err != nil {
+			log.Fatal("Error when generating keypair: ", err)
+		}
+		privBytes, err := crypto.MarshalPrivateKey(priv)
+		pubBytes, err := crypto.MarshalPublicKey(pub)
+		id, err := peer.IDFromPublicKey(pub)
+		if err != nil {
+			log.Fatal("Error when converting keypair: ", err)
+		}
+		privKey := base64.StdEncoding.EncodeToString(privBytes)
+		pubKey := base64.StdEncoding.EncodeToString(pubBytes)
+		peerId := PeerId{Id: id.String(), PrivKey: privKey, PubKey: pubKey}
+		bytes, err := json.Marshal(&peerId)
+		if err != nil {
+			log.Fatal("Error when converting peerId: ", err)
+		}
+		err = os.WriteFile(path, bytes, os.ModePerm)
+		if err != nil {
+			log.Fatal("Error writing peerId file: ", err)
+		}
+		log.Println("Created peerId file")
 	}
 }
 
