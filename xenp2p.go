@@ -483,7 +483,7 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 			var blocks []uint
 			for rows.Next() {
 				err = rows.Scan(&blockId)
-				if blockId != currentHeight+1 {
+				if blockId < currentHeight {
 					// avoid repeatedly asking for next block if the DB is synced
 					blocks = append(blocks, blockId)
 				}
