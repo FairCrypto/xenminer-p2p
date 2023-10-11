@@ -1,6 +1,5 @@
 package main
 
-// BLOCKCHAIN TABLE
 const (
 	createBlockchainTableSql string = `
 		CREATE TABLE IF NOT EXISTS blockchain (
@@ -31,4 +30,6 @@ const (
 			select null from blockchain bi where bi.id = bo.id + 1
 		) group by id limit 10	
 	`
+
+	initDbSql = `VACUUM;`
 )

@@ -116,15 +116,10 @@ func processGet(
 		}
 		log.Println("WANT block_id(s):", blockIds)
 		for _, blockId := range blockIds {
-			row := db.QueryRow(getRowBlockchainSql, fmt.Sprintf("%d", blockId))
-			if err != nil {
-				log.Fatal("Error when opening DB: ", err)
-			}
-			var block Block
-			err = row.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
+			block, err := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
 			if err == nil {
-				blocks := []Block{block}
+				blocks := []Block{*block}
 				bytes, err := json.Marshal(blocks)
 				if err != nil {
 					log.Fatal("Error converting block to data: ", err)
@@ -164,20 +159,7 @@ func processData(
 		for _, block := range blocks {
 			log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
 			if block.Id > 1 {
-				prevRow := db.QueryRow(getRowBlockchainSql, fmt.Sprintf("%d", block.Id-1))
-				if err != nil {
-					log.Println("Error when querying DB: ", err)
-					continue
-				}
-				var prevBlock Block
-				err = prevRow.Scan(
-					&prevBlock.Id,
-					&prevBlock.Timestamp,
-					&prevBlock.PrevHash,
-					&prevBlock.MerkleRoot,
-					&prevBlock.RecordsJson,
-					&prevBlock.BlockHash,
-				)
+				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
 					log.Println("Error when processing row: ", err)
 					continue
@@ -188,44 +170,12 @@ func processData(
 				}
 			}
 			if peerId != masterPeerId {
-				_, err = db.Exec(
-					insertBlockchainSql,
-					block.Id,
-					block.Timestamp,
-					block.PrevHash,
-					block.MerkleRoot,
-					block.RecordsJson,
-					block.BlockHash,
-				)
+				err = insertBlock(db, &block)
 				if err != nil {
 					log.Fatal("Error adding block to DB", err)
 				}
 			}
 		}
-	}
-}
-
-func getCurrentHeight(db *sql.DB) uint {
-	rows, err := db.Query(getMaxHeightBlockchainSql)
-	if err != nil {
-		log.Fatal("Error when opening DB: ", err)
-	}
-	var height Height
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Fatal("Error when closing DB: ", err)
-		}
-	}(rows)
-	rows.Next()
-	err = rows.Scan(&height.Max)
-	if err != nil {
-		log.Println("Error retrieving data from DB: ", err)
-	}
-	if height.Max.Valid {
-		return uint(height.Max.Int32)
-	} else {
-		return 0
 	}
 }
 
@@ -268,9 +218,6 @@ func loadPeerParams(path string) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 
 	return addr, privKey, peerId.Id
 }
-
-// /ip4/127.0.0.1/tcp/10330/p2p/Qma3GsJmB47xYuyahPZPSadh1avvxfyYQwk8R3UnFrQ6aP
-// /ip4/35.87.16.125/tcp/10330/p2p/12D3KooWEmj8Qy3G68gKTHroiMEn59HiziqEN7QdiHMkviBEDr69
 
 func prepareBootstrapAddresses(path string) []string {
 	err := godotenv.Load(path + "/.env")
@@ -384,7 +331,7 @@ func connectToPeer(ctx context.Context, h host.Host, destination string) {
 		log.Println(err)
 	}
 	// Add the destination's peer multiaddress in the peerstore.
-	// This will be used during connection and stream creation by libp2p.
+	// This will be used during connection and stream creation by Libp2p.
 	h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 	err = h.Connect(ctx, *info)
 	if err != nil {
@@ -468,26 +415,7 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 	for {
 		select {
 		case <-t.C:
-			currentHeight := getCurrentHeight(db)
-			rows, err := db.Query(getMissingRowIdsBlockchainSql)
-			if err != nil {
-				log.Fatal("Error when opening DB: ", err)
-			}
-			var blockId uint
-			defer func(rows *sql.Rows) {
-				err := rows.Close()
-				if err != nil {
-					log.Fatal("Error when closing DB: ", err)
-				}
-			}(rows)
-			var blocks []uint
-			for rows.Next() {
-				err = rows.Scan(&blockId)
-				if blockId < currentHeight {
-					// avoid repeatedly asking for next block if the DB is synced
-					blocks = append(blocks, blockId)
-				}
-			}
+			blocks := getMissingBlocks(db)
 			if len(blocks) > 0 {
 				bytes, err := json.Marshal(blocks)
 				if err != nil {
@@ -522,7 +450,7 @@ func initNode() {
 		if err != nil {
 			log.Fatal("Error when opening DB file: ", err)
 		}
-		_, err = db.Exec("VACUUM;")
+		_, err = db.Exec(initDbSql)
 		if err != nil {
 			log.Fatal("Error when init DB file: ", err)
 		}
