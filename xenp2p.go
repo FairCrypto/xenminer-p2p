@@ -48,6 +48,8 @@ type Height struct {
 
 type Blocks []Block
 
+const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
+
 func processBlockHeight(
 	peerId string,
 	ctx context.Context,
@@ -70,7 +72,7 @@ func processBlockHeight(
 		}
 
 		localHeight := getCurrentHeight(db)
-		if blockchainHeight > localHeight {
+		if blockchainHeight > localHeight && peerId != masterPeerId {
 			log.Println("DIFF", localHeight, "<", blockchainHeight)
 			delta := uint(math.Min(float64(blockchainHeight-localHeight), 5))
 			want := make([]uint, delta)
@@ -182,17 +184,19 @@ func processData(
 					continue
 				}
 			}
-			_, err = db.Exec(
-				insertBlockchainSql,
-				block.Id,
-				block.Timestamp,
-				block.PrevHash,
-				block.MerkleRoot,
-				block.RecordsJson,
-				block.BlockHash,
-			)
-			if err != nil {
-				log.Fatal("Error adding block to DB", err)
+			if peerId != masterPeerId {
+				_, err = db.Exec(
+					insertBlockchainSql,
+					block.Id,
+					block.Timestamp,
+					block.PrevHash,
+					block.MerkleRoot,
+					block.RecordsJson,
+					block.BlockHash,
+				)
+				if err != nil {
+					log.Fatal("Error adding block to DB", err)
+				}
 			}
 		}
 	}
@@ -569,6 +573,11 @@ func main() {
 
 	// load peer params from config file
 	addr, privKey, peerId := loadPeerParams(*configPath)
+	if peerId == masterPeerId {
+		log.Println("Master Node")
+	} else {
+		log.Println("Peer Node")
+	}
 
 	// construct a libp2p Host.
 	h := setupHost(privKey, addr)
