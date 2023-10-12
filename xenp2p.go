@@ -222,7 +222,7 @@ func processData(
 				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
 					// log.Println("Error when processing row: ", err)
-					// continue
+					continue
 				}
 				if prevBlock.BlockHash != block.PrevHash {
 					log.Println("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
