@@ -19,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
@@ -585,18 +586,7 @@ func initNode() {
 	}
 }
 
-func setupDiscovery(ctx context.Context, h host.Host, destinations []string) *drouting.RoutingDiscovery {
-	kademliaDHT, err := dht.New(ctx, h)
-	if err != nil {
-		panic(err)
-	}
-
-	// Bootstrap the DHT. In the default configuration, this spawns a Background
-	// thread that will refresh the peer table every five minutes.
-	log.Println("Bootstrapping the DHT")
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
-	}
+func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) *drouting.RoutingDiscovery {
 
 	// Let's connect to the bootstrap nodes first. They will tell us about the
 	// other nodes in the network.
@@ -621,13 +611,9 @@ func setupDiscovery(ctx context.Context, h host.Host, destinations []string) *dr
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
-	log.Println("Announcing ourselves...")
-	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
-	t, err := routingDiscovery.Advertise(ctx, "peers")
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("Successfully announced! ", t)
+	routingDiscovery := drouting.NewRoutingDiscovery(dht)
+	dutil.Advertise(ctx, routingDiscovery, "peers")
+	log.Println("Started announcing")
 
 	return routingDiscovery
 
@@ -668,8 +654,19 @@ func main() {
 	destinations := prepareBootstrapAddresses(*configPath)
 	// setupConnections(ctx, h, destinations)
 
-	// setup discovery
-	discovery := setupDiscovery(ctx, h, destinations)
+	// setup DHT discovery
+	kademliaDHT, err := dht.New(ctx, h)
+	if err != nil {
+		panic(err)
+	}
+
+	// Bootstrap the DHT. In the default configuration, this spawns a Background
+	// thread that will refresh the peer table every five minutes.
+	log.Println("Bootstrapping the DHT")
+	if err = kademliaDHT.Bootstrap(ctx); err != nil {
+		panic(err)
+	}
+	discovery := setupDiscovery(ctx, h, kademliaDHT, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
