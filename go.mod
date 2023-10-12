@@ -80,6 +80,8 @@ require (
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/samber/lo v1.38.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/txaty/go-merkletree v0.1.15 // indirect
+	github.com/txaty/gool v0.1.5 // indirect
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.20.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

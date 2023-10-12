@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -23,6 +25,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +43,28 @@ type Block struct {
 	MerkleRoot  string `json:"merkle_root"`
 	RecordsJson string `json:"records_json"`
 	BlockHash   string `json:"block_hash"`
+}
+
+/*
+	EXAMPLE:
+	{
+		"account": "0x449e81babda663f233cd197b1a0174e6779f7f8e",
+		"block_id": 2740231, // OR "xuni_id": 2740231,
+		"date": "2023-10-11 16:16:12",
+		"hash_to_verify": "$argon2id$v=19$m=65400,t=1,p=1$WEVOMTAwODIwMjJYRU4$7GIkohf/jGOqPJt08s0FjWk9VqYpjBXEN11HJsBKCbsnUCWUy4vRDXSoZ9CkkDEToYNLJwj4XjHvXYX3VNPnyQ",
+		"id": 5006101,
+		"key": "7ad9bf0adbfd6e0ff40463eefaaef9544a15639d79e55ee48fd6c6260979ca9b"
+	}
+*/
+
+type Record struct {
+	Id           uint    `json:"id"`
+	Account      string  `json:"account"`
+	BlockId      *uint64 `json:"block_id"`
+	XuniId       *uint64 `json:"xuni_id"`
+	Date         string  `json:"date"`
+	HashToVerify string  `json:"hash_to_verify"`
+	Key          string  `json:"key"`
 }
 
 type Height struct {
@@ -137,6 +162,34 @@ func processGet(
 	}
 }
 
+func validateBlock(block Block) (bool, error) {
+	recordsJson := block.RecordsJson
+	var records []Record
+	err := json.Unmarshal([]byte(recordsJson), &records)
+	if err != nil {
+		log.Println("Error converting records JSON: ", err)
+	}
+
+	toHash := func(record Record, index int) string {
+		var id int64
+		if record.XuniId != nil {
+			id = int64(*record.XuniId)
+		} else {
+			id = int64(*record.BlockId)
+		}
+		// hash_value(str(block_id) + hash_to_verify + key + account))
+		stringToHash := strconv.FormatInt(id, 10) + record.HashToVerify + record.Key + record.Account
+		h := sha256.New()
+		defer h.Reset()
+		h.Write([]byte(stringToHash))
+		bs := h.Sum(make([]byte, 0, h.Size()))
+		return hex.EncodeToString(bs)
+	}
+	hashes := lo.Map(records, toHash)
+	merkleRoot, _ := buildMerkleTree(hashes, map[string]MerkleNode{})
+	return merkleRoot == block.MerkleRoot, err
+}
+
 func processData(
 	peerId string,
 	ctx context.Context,
@@ -169,7 +222,8 @@ func processData(
 					continue
 				}
 			}
-			if peerId != masterPeerId {
+			blockIsValid, err := validateBlock(block)
+			if peerId != masterPeerId && blockIsValid {
 				err = insertBlock(db, &block)
 				if err != nil {
 					log.Fatal("Error adding block to DB", err)
