@@ -446,9 +446,9 @@ func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDisco
 		select {
 		case <-t.C:
 			// options := discovery2.Options{Ttl: 10 * time.Minute}
-			t, err := disc.Advertise(ctx, "peers")
+			t, err := disc.Advertise(ctx, "/peers")
 			log.Println("Searching for other peers for ", t.String())
-			peerChan, err := disc.FindPeers(ctx, "peers")
+			peerChan, err := disc.FindPeers(ctx, "/peers")
 			if err != nil {
 				log.Println(err)
 			}
@@ -612,7 +612,7 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dht)
-	dutil.Advertise(ctx, routingDiscovery, "peers")
+	dutil.Advertise(ctx, routingDiscovery, "/peers")
 	log.Println("Started announcing")
 
 	return routingDiscovery
