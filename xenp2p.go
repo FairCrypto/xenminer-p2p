@@ -18,6 +18,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
@@ -27,7 +29,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 )
 
 type PeerId struct {
@@ -542,6 +547,68 @@ func initNode() {
 	}
 }
 
+func setupDiscovery(ctx context.Context, h host.Host, destinations []string) {
+	kademliaDHT, err := dht.New(ctx, h)
+	if err != nil {
+		panic(err)
+	}
+
+	// Bootstrap the DHT. In the default configuration, this spawns a Background
+	// thread that will refresh the peer table every five minutes.
+	log.Println("Bootstrapping the DHT")
+	if err = kademliaDHT.Bootstrap(ctx); err != nil {
+		panic(err)
+	}
+
+	// Let's connect to the bootstrap nodes first. They will tell us about the
+	// other nodes in the network.
+	var wg sync.WaitGroup
+	for _, peerAddr := range destinations {
+		address, err := multiaddr.NewMultiaddr(peerAddr)
+		if err != nil {
+			log.Println(err)
+		}
+		peerInfo, _ := peer.AddrInfoFromP2pAddr(address)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := h.Connect(ctx, *peerInfo); err != nil {
+				log.Println(err)
+			} else {
+				log.Println("Connection established with bootstrap node:", *peerInfo)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// We use a rendezvous point "meet me here" to announce our location.
+	// This is like telling your friends to meet you at the Eiffel Tower.
+	log.Println("Announcing ourselves...")
+	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
+	dutil.Advertise(ctx, routingDiscovery, "hello")
+	log.Println("Successfully announced!")
+
+	// Now, look for others who have announced
+	// This is like your friend telling you the location to meet you.
+	log.Println("Searching for other peers...")
+	peerChan, err := routingDiscovery.FindPeers(ctx, "hello")
+	if err != nil {
+		log.Println(err)
+	}
+
+	for p := range peerChan {
+		if p.ID == h.ID() {
+			continue
+		}
+		log.Println("Found peer:", p)
+		err = h.Connect(ctx, p)
+		if err != nil {
+			log.Println("Error connecting to peer: ", err)
+		}
+		log.Println("Connected to:", p)
+	}
+}
+
 func main() {
 
 	init := flag.Bool("init", false, "init node")
@@ -575,7 +642,8 @@ func main() {
 
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
-	setupConnections(ctx, h, destinations)
+	// setupConnections(ctx, h, destinations)
+	setupDiscovery(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
