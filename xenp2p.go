@@ -424,6 +424,7 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 			peers := h.Peerstore().Peers()
+			log.Println(peers)
 			for _, addr := range destinations {
 				if !hasPeer(peers, addr) {
 					connectToPeer(ctx, h, addr)
