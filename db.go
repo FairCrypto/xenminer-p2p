@@ -50,13 +50,14 @@ func getMissingBlocks(db *sql.DB) []uint {
 	currentHeight := getCurrentHeight(db)
 	rows, err := db.Query(getMissingRowIdsBlockchainSql)
 	if err != nil {
-		log.Println("Error when opening DB: ", err)
+		log.Println("Error when querying DB: ", err)
+		return make([]uint, 0)
 	}
 	var blockId uint
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-			log.Println("Error when closing DB: ", err)
+			log.Println("Error when closing rows: ", err)
 		}
 	}(rows)
 	var blocks []uint
@@ -73,13 +74,14 @@ func getMissingBlocks(db *sql.DB) []uint {
 func getCurrentHeight(db *sql.DB) uint {
 	rows, err := db.Query(getMaxHeightBlockchainSql)
 	if err != nil {
-		log.Println("Error when opening DB: ", err)
+		log.Println("Error when querying DB: ", err)
+		return 0
 	}
 	var height Height
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-			log.Println("Error when closing DB: ", err)
+			log.Println("Error when closing rows: ", err)
 		}
 	}(rows)
 	rows.Next()
