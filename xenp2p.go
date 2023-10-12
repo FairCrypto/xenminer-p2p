@@ -233,7 +233,7 @@ func processData(
 			if peerId != masterPeerId && blockIsValid {
 				err = insertBlock(db, &block)
 				if err != nil {
-					log.Fatal("Error adding block to DB", err)
+					log.Println("Error adding block to DB: ", err)
 				}
 			}
 		}
