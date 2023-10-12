@@ -446,6 +446,7 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 		select {
 		case <-t.C:
 			log.Println("Searching for other peers...")
+			dutil.Advertise(ctx, discovery, "hello")
 			peerChan, err := discovery.FindPeers(ctx, "hello")
 			if err != nil {
 				log.Println(err)
