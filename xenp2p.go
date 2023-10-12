@@ -445,7 +445,8 @@ func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDisco
 	for {
 		select {
 		case <-t.C:
-			// options := discovery2.Options{Ttl: 10 * time.Minute}
+			// var options = discovery2.Options{Ttl: time.Minute}
+			// _ = options.Apply()
 			t, err := disc.Advertise(ctx, "/peers")
 			log.Println("Searching for other peers for ", t.String())
 			peerChan, err := disc.FindPeers(ctx, "/peers")
@@ -666,6 +667,7 @@ func main() {
 	if err = kademliaDHT.Bootstrap(ctx); err != nil {
 		panic(err)
 	}
+	time.Sleep(2 * time.Second)
 	discovery := setupDiscovery(ctx, h, kademliaDHT, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
