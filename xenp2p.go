@@ -221,8 +221,8 @@ func processData(
 			if block.Id > 1 {
 				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
-					log.Println("Error when processing row: ", err)
-					continue
+					// log.Println("Error when processing row: ", err)
+					// continue
 				}
 				if prevBlock.BlockHash != block.PrevHash {
 					log.Println("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
