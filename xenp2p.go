@@ -435,11 +435,45 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 	}
 }
 
+func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.RoutingDiscovery, t time.Ticker, quit <-chan struct{}) {
+	// Now, look for others who have announced
+	// This is like your friend telling you the location to meet you.
+
+	for {
+		select {
+		case <-t.C:
+			log.Println("Searching for other peers...")
+			peerChan, err := discovery.FindPeers(ctx, "hello")
+			if err != nil {
+				log.Println(err)
+			}
+
+			for p := range peerChan {
+				if p.ID == h.ID() {
+					continue
+				}
+				log.Println("Found peer:", p)
+				err = h.Connect(ctx, p)
+				if err != nil {
+					log.Println("Error connecting to peer: ", err)
+				}
+				log.Println("Connected to:", p)
+			}
+
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+
+}
+
 func checkPubsubPeers(ps *pubsub.PubSub, t time.Ticker, quit <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
+
 			peers := ps.ListPeers("block_height")
 			log.Println("PEERS", peers)
 
@@ -547,7 +581,7 @@ func initNode() {
 	}
 }
 
-func setupDiscovery(ctx context.Context, h host.Host, destinations []string) {
+func setupDiscovery(ctx context.Context, h host.Host, destinations []string) *drouting.RoutingDiscovery {
 	kademliaDHT, err := dht.New(ctx, h)
 	if err != nil {
 		panic(err)
@@ -587,26 +621,8 @@ func setupDiscovery(ctx context.Context, h host.Host, destinations []string) {
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(ctx, routingDiscovery, "hello")
 	log.Println("Successfully announced!")
+	return routingDiscovery
 
-	// Now, look for others who have announced
-	// This is like your friend telling you the location to meet you.
-	log.Println("Searching for other peers...")
-	peerChan, err := routingDiscovery.FindPeers(ctx, "hello")
-	if err != nil {
-		log.Println(err)
-	}
-
-	for p := range peerChan {
-		if p.ID == h.ID() {
-			continue
-		}
-		log.Println("Found peer:", p)
-		err = h.Connect(ctx, p)
-		if err != nil {
-			log.Println("Error connecting to peer: ", err)
-		}
-		log.Println("Connected to:", p)
-	}
 }
 
 func main() {
@@ -643,7 +659,7 @@ func main() {
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
 	// setupConnections(ctx, h, destinations)
-	setupDiscovery(ctx, h, destinations)
+	discovery := setupDiscovery(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
@@ -671,6 +687,7 @@ func main() {
 	every5Seconds := time.NewTicker(5 * time.Second)
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
+	go discoverPeers(ctx, h, discovery, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(1 * time.Second)
