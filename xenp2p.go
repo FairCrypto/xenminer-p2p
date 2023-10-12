@@ -19,7 +19,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
@@ -438,16 +437,17 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 	}
 }
 
-func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.RoutingDiscovery, t time.Ticker, quit <-chan struct{}) {
+func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDiscovery, t time.Ticker, quit <-chan struct{}) {
 	// Now, look for others who have announced
 	// This is like your friend telling you the location to meet you.
 
 	for {
 		select {
 		case <-t.C:
-			log.Println("Searching for other peers...")
-			dutil.Advertise(ctx, discovery, "hello")
-			peerChan, err := discovery.FindPeers(ctx, "hello")
+			// options := discovery2.Options{Ttl: 10 * time.Minute}
+			t, err := disc.Advertise(ctx, "/hello")
+			log.Println("Searching for other peers for ", t.String())
+			peerChan, err := disc.FindPeers(ctx, "/hello")
 			if err != nil {
 				log.Println(err)
 			}
@@ -623,8 +623,12 @@ func setupDiscovery(ctx context.Context, h host.Host, destinations []string) *dr
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	log.Println("Announcing ourselves...")
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
-	dutil.Advertise(ctx, routingDiscovery, "hello")
-	log.Println("Successfully announced!")
+	t, err := routingDiscovery.Advertise(ctx, "/hello")
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("Successfully announced! ", t)
+
 	return routingDiscovery
 
 }
