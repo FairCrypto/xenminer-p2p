@@ -445,9 +445,9 @@ func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDisco
 		select {
 		case <-t.C:
 			// options := discovery2.Options{Ttl: 10 * time.Minute}
-			t, err := disc.Advertise(ctx, "/hello")
+			t, err := disc.Advertise(ctx, "peers")
 			log.Println("Searching for other peers for ", t.String())
-			peerChan, err := disc.FindPeers(ctx, "/hello")
+			peerChan, err := disc.FindPeers(ctx, "peers")
 			if err != nil {
 				log.Println(err)
 			}
@@ -623,7 +623,7 @@ func setupDiscovery(ctx context.Context, h host.Host, destinations []string) *dr
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	log.Println("Announcing ourselves...")
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
-	t, err := routingDiscovery.Advertise(ctx, "/hello")
+	t, err := routingDiscovery.Advertise(ctx, "peers")
 	if err != nil {
 		log.Println(err)
 	}
@@ -667,6 +667,8 @@ func main() {
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
 	// setupConnections(ctx, h, destinations)
+
+	// setup discovery
 	discovery := setupDiscovery(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
@@ -675,11 +677,6 @@ func main() {
 	if err != nil {
 		log.Fatal("Error starting pubsub protocol", err)
 	}
-
-	// TODO: setup local mDNS discovery
-	// if err := setupDiscovery(host); err != nil {
-	//	panic(err)
-	// }
 
 	log.Println("Started: ", peerId)
 
