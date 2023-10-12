@@ -215,7 +215,9 @@ func processData(
 			log.Fatal("Error converting data message: ", err)
 		}
 		for _, block := range blocks {
-			log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
+			if msg.ReceivedFrom.String() == peerId {
+				log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
+			}
 			if block.Id > 1 {
 				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
