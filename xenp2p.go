@@ -640,6 +640,23 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 	dutil.Advertise(ctx, routingDiscovery, "/peers")
 	log.Println("Started announcing")
 
+	log.Println("Searching for other peers")
+	peerChan, err := routingDiscovery.FindPeers(ctx, "/peers")
+	if err != nil {
+		log.Println(err)
+	}
+
+	for p := range peerChan {
+		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
+			continue
+		}
+		log.Println("Found peer:", p)
+		err = h.Connect(ctx, p)
+		if err != nil {
+			log.Println("Error connecting to peer: ", err)
+		}
+		log.Println("Connected to:", p)
+	}
 	return routingDiscovery
 
 }
