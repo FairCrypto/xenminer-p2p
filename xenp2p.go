@@ -420,6 +420,15 @@ func hasPeer(peers peer.IDSlice, p string) bool {
 	return false
 }
 
+func hasDestination(destinations []string, p string) bool {
+	for i := 0; i < len(destinations); i++ {
+		if destinations[i] == p {
+			return true
+		}
+	}
+	return false
+}
+
 func checkConnections(ctx context.Context, h host.Host, destinations []string, t time.Ticker, quit <-chan struct{}) {
 	for {
 		select {
@@ -440,7 +449,14 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string, t
 	}
 }
 
-func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDiscovery, t time.Ticker, quit <-chan struct{}) {
+func discoverPeers(
+	ctx context.Context,
+	h host.Host,
+	disc *drouting.RoutingDiscovery,
+	destinations []string,
+	t time.Ticker,
+	quit <-chan struct{},
+) {
 	// Now, look for others who have announced
 	// This is like your friend telling you the location to meet you.
 
@@ -458,7 +474,7 @@ func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDisco
 			}
 
 			for p := range peerChan {
-				if p.ID == h.ID() {
+				if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
 					continue
 				}
 				log.Println("Found peer:", p)
@@ -704,7 +720,7 @@ func main() {
 	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	go discoverPeers(ctx, h, disc, *every5Seconds, make(chan struct{}))
+	go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(2 * time.Second)
