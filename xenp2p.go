@@ -744,11 +744,14 @@ func main() {
 	go processGet(peerId, ctx, getSub, dataTopic, db)
 
 	// check / renew connections periodically
+	every15Seconds := time.NewTicker(15 * time.Second)
+	defer every15Seconds.Stop()
+	go discoverPeers(ctx, h, disc, destinations, *every15Seconds, make(chan struct{}))
+
 	every5Seconds := time.NewTicker(5 * time.Second)
 	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(2 * time.Second)
