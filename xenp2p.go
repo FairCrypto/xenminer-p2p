@@ -422,7 +422,7 @@ func hasPeer(peers peer.IDSlice, p string) bool {
 }
 
 func hasDestination(destinations []string, p string) bool {
-	log.Println("?>", destinations, p)
+	log.Println("??", destinations, p)
 	for i := 0; i < len(destinations); i++ {
 		if destinations[i] == p {
 			return true
@@ -482,11 +482,11 @@ func discoverPeers(
 					h.ID(),
 					p.ID == h.ID(),
 					hasDestination(destinations, p.ID.String()),
-					hasPeer(h.Peerstore().Peers(), p.String()),
+					hasPeer(h.Peerstore().Peers(), p.ID.String()),
 				)
 				if p.ID == h.ID() ||
 					hasDestination(destinations, p.ID.String()) ||
-					hasPeer(h.Peerstore().Peers(), p.String()) {
+					hasPeer(h.Peerstore().Peers(), p.ID.String()) {
 					continue
 				}
 				log.Println("Found peer:", p)
