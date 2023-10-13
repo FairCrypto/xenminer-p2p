@@ -720,7 +720,7 @@ func main() {
 	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
+	// go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(2 * time.Second)
