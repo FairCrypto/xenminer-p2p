@@ -478,6 +478,7 @@ func discoverPeers(
 					"Candidate ",
 					p.ID,
 					h.ID(),
+					p.ID == h.ID(),
 					hasDestination(destinations, p.ID.String()),
 					hasPeer(h.Peerstore().Peers(), p.String()),
 				)
