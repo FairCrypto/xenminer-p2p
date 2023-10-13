@@ -695,7 +695,8 @@ func main() {
 		panic(err)
 	}
 	time.Sleep(2 * time.Second)
-	disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	setupDiscovery(ctx, h, kademliaDHT, destinations)
+	// disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
 	// setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
