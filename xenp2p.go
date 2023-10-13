@@ -476,14 +476,6 @@ func discoverPeers(
 			}
 
 			for p := range peerChan {
-				log.Println(
-					"Candidate ",
-					p.ID,
-					h.ID(),
-					p.ID == h.ID(),
-					hasDestination(destinations, p.ID.String()),
-					hasPeer(h.Peerstore().Peers(), p.ID.String()),
-				)
 				if p.ID == h.ID() ||
 					hasDestination(destinations, p.ID.String()) ||
 					hasPeer(h.Peerstore().Peers(), p.ID.String()) {
@@ -746,9 +738,9 @@ func main() {
 	go processGet(peerId, ctx, getSub, dataTopic, db)
 
 	// check / renew connections periodically
-	every15Seconds := time.NewTicker(15 * time.Second)
-	defer every15Seconds.Stop()
-	go discoverPeers(ctx, h, disc, destinations, *every15Seconds, make(chan struct{}))
+	everySecond := time.NewTicker(2 * time.Second)
+	defer everySecond.Stop()
+	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
 
 	every5Seconds := time.NewTicker(5 * time.Second)
 	defer every5Seconds.Stop()
@@ -756,9 +748,9 @@ func main() {
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
-	everySecond := time.NewTicker(2 * time.Second)
-	defer everySecond.Stop()
-	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
+	every20Seconds := time.NewTicker(20 * time.Second)
+	defer every20Seconds.Stop()
+	go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
 
 	// wait until interrupted
 	select {}
