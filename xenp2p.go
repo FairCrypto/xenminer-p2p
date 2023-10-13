@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -338,6 +339,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	if err != nil {
 		log.Fatal("Error subscribing to topic", err)
 	}
+	log.Println(blockHeightTopic.ListPeers(), dataTopic.ListPeers(), getTopic.ListPeers())
 	return blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic
 }
 
@@ -445,9 +447,10 @@ func discoverPeers(ctx context.Context, h host.Host, disc *drouting.RoutingDisco
 	for {
 		select {
 		case <-t.C:
-			// var options = discovery2.Options{Ttl: time.Minute}
+			var options []discovery.Option
+			options = append(options, discovery.TTL(10*time.Minute))
 			// _ = options.Apply()
-			t, err := disc.Advertise(ctx, "/peers")
+			t, err := disc.Advertise(ctx, "/peers", options...)
 			log.Println("Searching for other peers for ", t.String())
 			peerChan, err := disc.FindPeers(ctx, "/peers")
 			if err != nil {
@@ -532,9 +535,14 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 	}
 }
 
-func initNode() {
+func initNode(path0 string) {
 	log.Println("Initializing node cfg and DB")
-	path := ".node"
+	var path string
+	if path0 == "" {
+		path = ".node"
+	} else {
+		path = path0
+	}
 	// check if dir doesn't exist; if no, create it
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(path, os.ModePerm)
@@ -543,9 +551,9 @@ func initNode() {
 		}
 	}
 	log.Println("Created dir")
-	path = ".node/blockchain.db"
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		db, err := sql.Open("sqlite3", path)
+	pathToDb := path + "/blockchain.db"
+	if _, err := os.Stat(pathToDb); errors.Is(err, os.ErrNotExist) {
+		db, err := sql.Open("sqlite3", pathToDb)
 		if err != nil {
 			log.Fatal("Error when opening DB file: ", err)
 		}
@@ -560,8 +568,8 @@ func initNode() {
 		log.Println("Created DB")
 	}
 
-	path = ".node/peer.json"
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+	pathToPeerId := path + "/peer.json"
+	if _, err := os.Stat(pathToPeerId); errors.Is(err, os.ErrNotExist) {
 		priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
 		if err != nil {
 			log.Fatal("Error when generating keypair: ", err)
@@ -579,7 +587,7 @@ func initNode() {
 		if err != nil {
 			log.Fatal("Error when converting peerId: ", err)
 		}
-		err = os.WriteFile(path, bytes, os.ModePerm)
+		err = os.WriteFile(pathToPeerId, bytes, os.ModePerm)
 		if err != nil {
 			log.Fatal("Error writing peerId file: ", err)
 		}
@@ -627,7 +635,7 @@ func main() {
 	flag.Parse()
 
 	if *init {
-		initNode()
+		initNode(*configPath)
 		os.Exit(0)
 	}
 
@@ -653,10 +661,13 @@ func main() {
 
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
-	// setupConnections(ctx, h, destinations)
 
 	// setup DHT discovery
-	kademliaDHT, err := dht.New(ctx, h)
+	var options []dht.Option
+	if len(destinations) == 0 {
+		options = append(options, dht.Mode(dht.ModeServer))
+	}
+	kademliaDHT, err := dht.New(ctx, h, options...)
 	if err != nil {
 		panic(err)
 	}
@@ -668,11 +679,12 @@ func main() {
 		panic(err)
 	}
 	time.Sleep(2 * time.Second)
-	discovery := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	// disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
-	// ps, err := pubsub.NewGossipSub(ctx, host)
+	// ps, err := pubsub.NewGossipSub(ctx, h)
 	if err != nil {
 		log.Fatal("Error starting pubsub protocol", err)
 	}
@@ -689,12 +701,14 @@ func main() {
 
 	// check / renew connections periodically
 	every5Seconds := time.NewTicker(5 * time.Second)
+	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	go discoverPeers(ctx, h, discovery, *every5Seconds, make(chan struct{}))
+	// go discoverPeers(ctx, h, disc, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
-	everySecond := time.NewTicker(1 * time.Second)
+	everySecond := time.NewTicker(2 * time.Second)
+	defer everySecond.Stop()
 	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
 
 	// wait until interrupted
