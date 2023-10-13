@@ -482,7 +482,9 @@ func discoverPeers(
 					hasDestination(destinations, p.ID.String()),
 					hasPeer(h.Peerstore().Peers(), p.String()),
 				)
-				if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
+				if p.ID == h.ID() ||
+					hasDestination(destinations, p.ID.String()) ||
+					hasPeer(h.Peerstore().Peers(), p.String()) {
 					continue
 				}
 				log.Println("Found peer:", p)
