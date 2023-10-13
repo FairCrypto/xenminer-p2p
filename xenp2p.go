@@ -679,8 +679,8 @@ func main() {
 		panic(err)
 	}
 	time.Sleep(2 * time.Second)
-	// disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
-	setupConnections(ctx, h, destinations)
+	disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	// setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
@@ -704,7 +704,7 @@ func main() {
 	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	// go discoverPeers(ctx, h, disc, *every5Seconds, make(chan struct{}))
+	go discoverPeers(ctx, h, disc, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(2 * time.Second)
