@@ -746,9 +746,11 @@ func main() {
 	// go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
-	every20Seconds := time.NewTicker(20 * time.Second)
-	defer every20Seconds.Stop()
-	go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
+	if len(destinations) > 0 {
+		every20Seconds := time.NewTicker(20 * time.Second)
+		defer every20Seconds.Stop()
+		go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
+	}
 
 	// wait until interrupted
 	select {}
