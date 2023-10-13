@@ -467,13 +467,20 @@ func discoverPeers(
 			options = append(options, discovery.TTL(10*time.Minute))
 			// _ = options.Apply()
 			t, err := disc.Advertise(ctx, "/peers", options...)
-			log.Println("Searching for other peers for ", t.String())
 			peerChan, err := disc.FindPeers(ctx, "/peers")
+			log.Println("Searching for other peers for ", t.String())
 			if err != nil {
 				log.Println(err)
 			}
 
 			for p := range peerChan {
+				log.Println(
+					"Candidate ",
+					p.ID,
+					h.ID(),
+					hasDestination(destinations, p.ID.String()),
+					hasPeer(h.Peerstore().Peers(), p.String()),
+				)
 				if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
 					continue
 				}
@@ -713,7 +720,7 @@ func main() {
 	}
 	time.Sleep(2 * time.Second)
 	setupDiscovery(ctx, h, kademliaDHT, destinations)
-	// disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
 	// setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
@@ -738,7 +745,7 @@ func main() {
 	defer every5Seconds.Stop()
 	go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
-	// go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
+	go discoverPeers(ctx, h, disc, destinations, *every5Seconds, make(chan struct{}))
 	go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	everySecond := time.NewTicker(2 * time.Second)
