@@ -412,6 +412,7 @@ func setupConnections(ctx context.Context, h host.Host, destinations []string) {
 }
 
 func hasPeer(peers peer.IDSlice, p string) bool {
+	log.Println("?", peers, p)
 	for i := 0; i < peers.Len(); i++ {
 		if peers[i].String() == p {
 			return true
@@ -421,6 +422,7 @@ func hasPeer(peers peer.IDSlice, p string) bool {
 }
 
 func hasDestination(destinations []string, p string) bool {
+	log.Println("?>", destinations, p)
 	for i := 0; i < len(destinations); i++ {
 		if destinations[i] == p {
 			return true
