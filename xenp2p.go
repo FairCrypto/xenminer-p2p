@@ -714,13 +714,15 @@ func main() {
 	if err = kademliaDHT.Bootstrap(ctx); err != nil {
 		panic(err)
 	}
+
 	time.Sleep(2 * time.Second)
 	// setupDiscovery(ctx, h, kademliaDHT, destinations)
 	var disc *drouting.RoutingDiscovery
 	if len(destinations) > 0 {
 		disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+	} else {
+		setupConnections(ctx, h, destinations)
 	}
-	// setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
 	ps, err := pubsub.NewFloodSub(ctx, h)
@@ -739,6 +741,7 @@ func main() {
 	go processData(peerId, ctx, dataSub, db)
 	go processGet(peerId, ctx, getSub, dataTopic, db)
 
+	time.Sleep(time.Second)
 	// check / renew connections periodically
 	everySecond := time.NewTicker(2 * time.Second)
 	// defer everySecond.Stop()
@@ -750,10 +753,15 @@ func main() {
 	// go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
+	time.Sleep(time.Second)
 	if len(destinations) > 0 {
 		every20Seconds := time.NewTicker(20 * time.Second)
 		// defer every20Seconds.Stop()
 		go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
+	} else {
+		every5Seconds := time.NewTicker(5 * time.Second)
+		// defer every5Seconds.Stop()
+		go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
 	}
 
 	// wait until interrupted
