@@ -295,14 +295,16 @@ func prepareBootstrapAddresses(path string) []string {
 	bootstrapPorts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PORTS"), ","), notEmpty)
 	bootstrapPeers := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ","), notEmpty)
 
-	destinations := make([]string, len(bootstrapPeers))
+	var destinations []string
 	for i, peerId := range bootstrapPeers {
-		destinations[i] = fmt.Sprintf(
-			"/ip4/%s/tcp/%s/p2p/%s",
-			bootstrapHosts[i],
-			bootstrapPorts[i],
-			peerId,
-		)
+		destinations = append(
+			destinations,
+			fmt.Sprintf(
+				"/ip4/%s/tcp/%s/p2p/%s",
+				bootstrapHosts[i],
+				bootstrapPorts[i],
+				peerId,
+			))
 	}
 	return destinations
 }
@@ -385,8 +387,7 @@ func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 	return h
 }
 
-func connectToPeer(ctx context.Context, h host.Host, destination string) {
-	// Turn the destination into a multiaddr.
+var toAddrInfo = func(destination string, _ int) peer.AddrInfo {
 	address, err := multiaddr.NewMultiaddr(destination)
 	if err != nil {
 		log.Println(err)
@@ -395,10 +396,16 @@ func connectToPeer(ctx context.Context, h host.Host, destination string) {
 	if err != nil {
 		log.Println(err)
 	}
+	return *info
+}
+
+func connectToPeer(ctx context.Context, h host.Host, destination string) {
+	// Turn the destination into a multiaddr.
+	info := toAddrInfo(destination, 0)
 	// Add the destination's peer multiaddress in the peerstore.
 	// This will be used during connection and stream creation by Libp2p.
 	h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
-	err = h.Connect(ctx, *info)
+	err := h.Connect(ctx, info)
 	if err != nil {
 		log.Println("Error connecting: ", err)
 	}
@@ -691,13 +698,17 @@ func main() {
 	}
 
 	log.Println("Loading config from", *configPath)
+	log.Println("Starting Node")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// setup DB and check / init table(s)
 	db := setupDB(*configPath)
-
-	log.Println("Starting Node")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx = context.WithValue(ctx, "db", db)
+	defer func(db *sql.DB) {
+		_ = db.Close()
+	}(db)
 
 	// load peer params from config file
 	addr, privKey, peerId := loadPeerParams(*configPath)
@@ -709,6 +720,10 @@ func main() {
 
 	// construct a libp2p Host.
 	h := setupHost(privKey, addr)
+	ctx = context.WithValue(ctx, "host", h)
+	defer func(h host.Host) {
+		_ = h.Close()
+	}(h)
 
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
@@ -724,27 +739,36 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	ctx = context.WithValue(ctx, "dht", kademliaDHT)
+	defer func(kademliaDHT *dht.IpfsDHT) {
+		_ = kademliaDHT.Close()
+	}(kademliaDHT)
+
+	// setupDiscovery(ctx, h, kademliaDHT, destinations)
+	var disc *drouting.RoutingDiscovery
+	disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+	if len(destinations) > 0 {
+		// disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+		// log.Println(disc)
+	} else {
+		// setupConnections(ctx, h, destinations)
+	}
 
 	// Bootstrap the DHT. In the default configuration, this spawns a Background
 	// thread that will refresh the peer table every five minutes.
-	log.Println("Bootstrapping the DHT")
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
-	}
-
-	time.Sleep(2 * time.Second)
-	// setupDiscovery(ctx, h, kademliaDHT, destinations)
-	var disc *drouting.RoutingDiscovery
-	if len(destinations) > 0 {
-		disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
-		// log.Println(disc)
-	} else {
-		setupConnections(ctx, h, destinations)
-	}
+	// log.Println("Bootstrapping the DHT")
+	// if err = kademliaDHT.Bootstrap(ctx); err != nil {
+	// 	panic(err)
+	// }
 
 	// setup pubsub protocol (either floodsub or gossip)
-	ps, err := pubsub.NewFloodSub(ctx, h)
-	// ps, err := pubsub.NewGossipSub(ctx, h)
+	var discOptions []pubsub.Option
+	peers := lo.Map(destinations, toAddrInfo)
+	discOptions = append(discOptions, pubsub.WithDirectPeers(peers))
+	discOptions = append(discOptions, pubsub.WithDiscovery(disc))
+	// ps, err := pubsub.NewFloodSub(ctx, h, discOptions...)
+	ps, err := pubsub.NewGossipSub(ctx, h, discOptions...)
+	ctx = context.WithValue(ctx, "pubsub", ps)
 	if err != nil {
 		log.Fatal("Error starting pubsub protocol", err)
 	}
@@ -753,7 +777,6 @@ func main() {
 
 	// subscribe to essential topics
 	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
-	time.Sleep(time.Second)
 
 	// spawn message processing by topics
 	go processBlockHeight(peerId, ctx, blockHeightSub, getTopic, db)
@@ -764,13 +787,13 @@ func main() {
 	go broadcastBlockHeight(ctx, blockHeightTopic, db)
 
 	// go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
-	go checkPubsubPeers(ps)
+	// go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	if len(destinations) > 0 {
-		go discoverPeers(ctx, h, disc, destinations)
+		// go discoverPeers(ctx, h, disc, destinations)
 	} else {
-		go checkConnections(ctx, h, destinations)
+		// go checkConnections(ctx, h, destinations)
 	}
 
 	// wait until interrupted
