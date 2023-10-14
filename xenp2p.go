@@ -741,7 +741,7 @@ func main() {
 
 	// check / renew connections periodically
 	everySecond := time.NewTicker(2 * time.Second)
-	defer everySecond.Stop()
+	// defer everySecond.Stop()
 	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
 
 	// every5Seconds := time.NewTicker(5 * time.Second)
@@ -752,7 +752,7 @@ func main() {
 
 	if len(destinations) > 0 {
 		every20Seconds := time.NewTicker(20 * time.Second)
-		defer every20Seconds.Stop()
+		// defer every20Seconds.Stop()
 		go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
 	}
 
