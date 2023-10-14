@@ -429,7 +429,11 @@ func hasDestination(destinations []string, p string) bool {
 	return false
 }
 
-func checkConnections(ctx context.Context, h host.Host, destinations []string, t time.Ticker, quit <-chan struct{}) {
+func checkConnections(ctx context.Context, h host.Host, destinations []string) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
+
 	for {
 		select {
 		case <-t.C:
@@ -454,9 +458,10 @@ func discoverPeers(
 	h host.Host,
 	disc *drouting.RoutingDiscovery,
 	destinations []string,
-	t time.Ticker,
-	quit <-chan struct{},
 ) {
+	t := time.NewTicker(20 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
 	// Now, look for others who have announced
 	// This is like your friend telling you the location to meet you.
 
@@ -494,7 +499,11 @@ func discoverPeers(
 
 }
 
-func checkPubsubPeers(ps *pubsub.PubSub, t time.Ticker, quit <-chan struct{}) {
+func checkPubsubPeers(ps *pubsub.PubSub) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
+
 	for {
 		select {
 		case <-t.C:
@@ -510,7 +519,11 @@ func checkPubsubPeers(ps *pubsub.PubSub, t time.Ticker, quit <-chan struct{}) {
 	}
 }
 
-func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time.Ticker, quit <-chan struct{}) {
+func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB) {
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
+
 	for {
 		select {
 		case <-t.C:
@@ -744,25 +757,17 @@ func main() {
 
 	time.Sleep(time.Second)
 	// check / renew connections periodically
-	everySecond := time.NewTicker(2 * time.Second)
-	// defer everySecond.Stop()
-	go broadcastBlockHeight(ctx, blockHeightTopic, db, *everySecond, make(chan struct{}))
+	go broadcastBlockHeight(ctx, blockHeightTopic, db)
 
-	every5Seconds := time.NewTicker(5 * time.Second)
-	// defer every5Seconds.Stop()
 	// go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
-	go checkPubsubPeers(ps, *every5Seconds, make(chan struct{}))
+	go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	time.Sleep(time.Second)
 	if len(destinations) > 0 {
-		every20Seconds := time.NewTicker(20 * time.Second)
-		// defer every20Seconds.Stop()
-		go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
+		go discoverPeers(ctx, h, disc, destinations)
 	} else {
-		every5Seconds := time.NewTicker(5 * time.Second)
-		// defer every5Seconds.Stop()
-		go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
+		go checkConnections(ctx, h, destinations)
 	}
 
 	// wait until interrupted
