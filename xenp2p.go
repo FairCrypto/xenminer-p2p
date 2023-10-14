@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -464,12 +463,11 @@ func discoverPeers(
 	for {
 		select {
 		case <-t.C:
-			var options []discovery.Option
-			options = append(options, discovery.TTL(10*time.Minute))
-			// _ = options.Apply()
-			t, err := disc.Advertise(ctx, rendezVousString, options...)
+			// var options []discovery.Option
+			// options = append(options, discovery.TTL(10*time.Minute))
+			// t, err := disc.Advertise(ctx, rendezVousString, options...)
 			peerChan, err := disc.FindPeers(ctx, rendezVousString)
-			log.Println("Searching for other peers for ", t.String())
+			log.Println("Searching for other peers")
 			if err != nil {
 				log.Println(err)
 			}
