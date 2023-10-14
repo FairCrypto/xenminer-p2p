@@ -701,7 +701,7 @@ func main() {
 	// setup DHT discovery
 	var options []dht.Option
 	if len(destinations) == 0 {
-		options = append(options, dht.Mode(dht.ModeServer))
+		// options = append(options, dht.Mode(dht.ModeServer))
 	}
 	kademliaDHT, err := dht.New(ctx, h, options...)
 	if err != nil {
