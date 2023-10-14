@@ -700,6 +700,8 @@ func main() {
 	var options []dht.Option
 	if len(destinations) == 0 {
 		options = append(options, dht.Mode(dht.ModeServer))
+	} else {
+		options = append(options, dht.Mode(dht.ModeClient))
 	}
 	kademliaDHT, err := dht.New(ctx, h, options...)
 	if err != nil {
