@@ -713,7 +713,7 @@ func main() {
 	// setup DHT discovery
 	var options []dht.Option
 	if len(destinations) == 0 {
-		options = append(options, dht.Mode(dht.ModeServer))
+		// options = append(options, dht.Mode(dht.ModeServer))
 	} else {
 		options = append(options, dht.Mode(dht.ModeClient))
 	}
@@ -734,7 +734,7 @@ func main() {
 	var disc *drouting.RoutingDiscovery
 	if len(destinations) > 0 {
 		disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
-		log.Println(disc)
+		// log.Println(disc)
 	} else {
 		setupConnections(ctx, h, destinations)
 	}
