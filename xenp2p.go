@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	log0 "github.com/ipfs/go-log/v2"
 	"github.com/joho/godotenv"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -678,6 +679,8 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 
 func main() {
 
+	log0.SetAllLoggers(log0.LevelWarn)
+
 	init := flag.Bool("init", false, "init node")
 	configPath := flag.String("config", ".node", "path to config file")
 	flag.Parse()
@@ -750,13 +753,13 @@ func main() {
 
 	// subscribe to essential topics
 	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
+	time.Sleep(time.Second)
 
 	// spawn message processing by topics
 	go processBlockHeight(peerId, ctx, blockHeightSub, getTopic, db)
 	go processData(peerId, ctx, dataSub, db)
 	go processGet(peerId, ctx, getSub, dataTopic, db)
 
-	time.Sleep(time.Second)
 	// check / renew connections periodically
 	go broadcastBlockHeight(ctx, blockHeightTopic, db)
 
@@ -764,7 +767,6 @@ func main() {
 	go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
-	time.Sleep(time.Second)
 	if len(destinations) > 0 {
 		go discoverPeers(ctx, h, disc, destinations)
 	} else {
