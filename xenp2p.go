@@ -720,6 +720,7 @@ func main() {
 	var disc *drouting.RoutingDiscovery
 	if len(destinations) > 0 {
 		disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+		log.Println(disc)
 	} else {
 		setupConnections(ctx, h, destinations)
 	}
