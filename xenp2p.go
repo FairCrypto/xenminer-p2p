@@ -755,9 +755,9 @@ func main() {
 
 	time.Sleep(time.Second)
 	if len(destinations) > 0 {
-		every20Seconds := time.NewTicker(20 * time.Second)
+		// every20Seconds := time.NewTicker(20 * time.Second)
 		// defer every20Seconds.Stop()
-		go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
+		// go discoverPeers(ctx, h, disc, destinations, *every20Seconds, make(chan struct{}))
 	} else {
 		every5Seconds := time.NewTicker(5 * time.Second)
 		// defer every5Seconds.Stop()
