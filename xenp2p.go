@@ -81,7 +81,7 @@ type Height struct {
 type Blocks []Block
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
-const rendezVousString = "/xenblocks/0.1.0"
+const rendezvousString = "/xenblocks/0.1.0"
 
 func processBlockHeight(
 	peerId string,
@@ -343,7 +343,6 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	if err != nil {
 		log.Fatal("Error subscribing to topic", err)
 	}
-	log.Println(blockHeightTopic.ListPeers(), dataTopic.ListPeers(), getTopic.ListPeers())
 	return blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic
 }
 
@@ -438,7 +437,7 @@ func hasDestination(destinations []string, p string) bool {
 	return false
 }
 
-func checkConnections(ctx context.Context, h host.Host, destinations []string) {
+func checkConnections(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
@@ -448,12 +447,13 @@ func checkConnections(ctx context.Context, h host.Host, destinations []string) {
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 			peers := h.Peerstore().Peers()
-			log.Println(peers)
-			for _, addr := range destinations {
-				if !hasPeer(peers, addr) {
-					connectToPeer(ctx, h, addr)
-				}
-			}
+			size, _ := dht.NetworkSize()
+			log.Println(size, peers)
+			// for _, addr := range destinations {
+			//	if !hasPeer(peers, addr) {
+			//		connectToPeer(ctx, h, addr)
+			//	}
+			//}
 
 		case <-quit:
 			t.Stop()
@@ -479,8 +479,8 @@ func discoverPeers(
 		case <-t.C:
 			var options []discovery.Option
 			options = append(options, discovery.TTL(10*time.Minute))
-			t, err := disc.Advertise(ctx, rendezVousString, options...)
-			peerChan, err := disc.FindPeers(ctx, rendezVousString)
+			t, err := disc.Advertise(ctx, rendezvousString, options...)
+			peerChan, err := disc.FindPeers(ctx, rendezvousString)
 			log.Println("Searching for other peers ", t.String())
 			if err != nil {
 				log.Println(err)
@@ -518,8 +518,11 @@ func checkPubsubPeers(ps *pubsub.PubSub) {
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 
-			peers := ps.ListPeers("block_height")
-			log.Println("PEERS", peers)
+			bhPeers := ps.ListPeers("block_height")
+			dPeers := ps.ListPeers("data")
+			gPeers := ps.ListPeers("get")
+
+			log.Println("PEERS", bhPeers, dPeers, gPeers)
 
 		case <-quit:
 			t.Stop()
@@ -638,38 +641,37 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 
 	// Let's connect to the bootstrap nodes first. They will tell us about the
 	// other nodes in the network.
-	var wg sync.WaitGroup
-	for _, peerAddr := range destinations {
-		address, err := multiaddr.NewMultiaddr(peerAddr)
-		if err != nil {
-			log.Println(err)
+	/*
+		var wg sync.WaitGroup
+		for i, peerAddr := range destinations {
+			peerInfo := toAddrInfo(peerAddr, i)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := h.Connect(ctx, peerInfo); err != nil {
+					log.Println(err)
+				} else {
+					log.Println("Connection established with bootstrap node:", peerInfo)
+				}
+			}()
 		}
-		peerInfo, _ := peer.AddrInfoFromP2pAddr(address)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := h.Connect(ctx, *peerInfo); err != nil {
-				log.Println(err)
-			} else {
-				log.Println("Connection established with bootstrap node:", *peerInfo)
-			}
-		}()
-	}
-	wg.Wait()
+		wg.Wait()
+	*/
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dht)
-	dutil.Advertise(ctx, routingDiscovery, rendezVousString)
+	dutil.Advertise(ctx, routingDiscovery, rendezvousString)
 	log.Println("Started announcing")
 
 	log.Println("Searching for other peers")
-	peerChan, err := routingDiscovery.FindPeers(ctx, rendezVousString)
+	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
 	if err != nil {
 		log.Println(err)
 	}
 
 	for p := range peerChan {
+		log.Println("Peer candidate: ", p)
 		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
 			continue
 		}
@@ -727,6 +729,7 @@ func main() {
 
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath)
+	peers := lo.Map(destinations, toAddrInfo)
 
 	// setup DHT discovery
 	var options []dht.Option
@@ -734,6 +737,7 @@ func main() {
 		// options = append(options, dht.Mode(dht.ModeServer))
 	} else {
 		options = append(options, dht.Mode(dht.ModeClient))
+		options = append(options, dht.BootstrapPeers(peers...))
 	}
 	kademliaDHT, err := dht.New(ctx, h, options...)
 	if err != nil {
@@ -763,7 +767,6 @@ func main() {
 
 	// setup pubsub protocol (either floodsub or gossip)
 	var discOptions []pubsub.Option
-	peers := lo.Map(destinations, toAddrInfo)
 	discOptions = append(discOptions, pubsub.WithDirectPeers(peers))
 	discOptions = append(discOptions, pubsub.WithDiscovery(disc))
 	// ps, err := pubsub.NewFloodSub(ctx, h, discOptions...)
@@ -778,6 +781,8 @@ func main() {
 	// subscribe to essential topics
 	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
 
+	var wg sync.WaitGroup
+	wg.Add(6)
 	// spawn message processing by topics
 	go processBlockHeight(peerId, ctx, blockHeightSub, getTopic, db)
 	go processData(peerId, ctx, dataSub, db)
@@ -786,15 +791,15 @@ func main() {
 	// check / renew connections periodically
 	go broadcastBlockHeight(ctx, blockHeightTopic, db)
 
-	// go checkConnections(ctx, h, destinations, *every5Seconds, make(chan struct{}))
+	go checkConnections(ctx, h, kademliaDHT, destinations)
 	// go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
-	if len(destinations) > 0 {
-		// go discoverPeers(ctx, h, disc, destinations)
-	} else {
-		// go checkConnections(ctx, h, destinations)
-	}
+	// if len(destinations) > 0 {
+	go discoverPeers(ctx, h, disc, destinations)
+	// } else {
+	// go checkConnections(ctx, h, destinations)
+	// }
 
 	// wait until interrupted
 	select {}
