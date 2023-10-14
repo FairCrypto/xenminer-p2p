@@ -80,6 +80,7 @@ type Height struct {
 type Blocks []Block
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
+const rendezVousString = "/xenblocks/0.1.0"
 
 func processBlockHeight(
 	peerId string,
@@ -466,8 +467,8 @@ func discoverPeers(
 			var options []discovery.Option
 			options = append(options, discovery.TTL(10*time.Minute))
 			// _ = options.Apply()
-			t, err := disc.Advertise(ctx, "/peers", options...)
-			peerChan, err := disc.FindPeers(ctx, "/peers")
+			t, err := disc.Advertise(ctx, rendezVousString, options...)
+			peerChan, err := disc.FindPeers(ctx, rendezVousString)
 			log.Println("Searching for other peers for ", t.String())
 			if err != nil {
 				log.Println(err)
@@ -639,11 +640,11 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dht)
-	dutil.Advertise(ctx, routingDiscovery, "/peers")
+	dutil.Advertise(ctx, routingDiscovery, rendezVousString)
 	log.Println("Started announcing")
 
 	log.Println("Searching for other peers")
-	peerChan, err := routingDiscovery.FindPeers(ctx, "/peers")
+	peerChan, err := routingDiscovery.FindPeers(ctx, rendezVousString)
 	if err != nil {
 		log.Println(err)
 	}
