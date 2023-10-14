@@ -701,7 +701,7 @@ func main() {
 	// setup DHT discovery
 	var options []dht.Option
 	if len(destinations) == 0 {
-		// options = append(options, dht.Mode(dht.ModeServer))
+		options = append(options, dht.Mode(dht.ModeServer))
 	}
 	kademliaDHT, err := dht.New(ctx, h, options...)
 	if err != nil {
@@ -715,8 +715,11 @@ func main() {
 		panic(err)
 	}
 	time.Sleep(2 * time.Second)
-	setupDiscovery(ctx, h, kademliaDHT, destinations)
-	disc := setupDiscovery(ctx, h, kademliaDHT, destinations)
+	// setupDiscovery(ctx, h, kademliaDHT, destinations)
+	var disc *drouting.RoutingDiscovery
+	if len(destinations) > 0 {
+		disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+	}
 	// setupConnections(ctx, h, destinations)
 
 	// setup pubsub protocol (either floodsub or gossip)
