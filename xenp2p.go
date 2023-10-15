@@ -346,7 +346,7 @@ func subscribeToTopics(ps *pubsub.PubSub) (
 	return blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic
 }
 
-func setupDB(path string) *sql.DB {
+func setupDB(path string, ro bool) *sql.DB {
 	err := godotenv.Load(path + "/.env")
 	var dbPath = ""
 	if err != nil {
@@ -355,6 +355,10 @@ func setupDB(path string) *sql.DB {
 	dbPath = os.Getenv("DB_LOCATION")
 	if dbPath == "" {
 		dbPath = path + "/blockchain.db"
+	}
+	if ro {
+		// add read-only flag
+		dbPath += "?mode=ro"
 	}
 
 	db, err := sql.Open("sqlite3", dbPath)
@@ -692,6 +696,7 @@ func main() {
 
 	init := flag.Bool("init", false, "init node")
 	configPath := flag.String("config", ".node", "path to config file")
+	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
 	flag.Parse()
 
 	if *init {
@@ -706,7 +711,7 @@ func main() {
 	defer cancel()
 
 	// setup DB and check / init table(s)
-	db := setupDB(*configPath)
+	db := setupDB(*configPath, *readOnlyDB)
 	ctx = context.WithValue(ctx, "db", db)
 	defer func(db *sql.DB) {
 		_ = db.Close()
