@@ -802,5 +802,6 @@ func main() {
 	// }
 
 	// wait until interrupted
-	select {}
+	wg.Wait()
+	// select {}
 }
