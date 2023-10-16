@@ -32,4 +32,6 @@ const (
 	`
 
 	initDbSql = `VACUUM;`
+
+	resetDbSql = `delete from blockchain;`
 )

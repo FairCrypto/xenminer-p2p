@@ -96,12 +96,12 @@ func processBlockHeight(
 			continue
 		}
 		if err != nil {
-			log.Fatal("Error getting message", err)
+			log.Println("Error getting message: ", err)
 		}
 		var blockchainHeight uint
 		err = json.Unmarshal(msg.Data, &blockchainHeight)
 		if err != nil {
-			log.Fatal("Error decoding message", err)
+			log.Println("Error decoding message: ", err)
 		}
 
 		localHeight := getCurrentHeight(db)
@@ -114,11 +114,11 @@ func processBlockHeight(
 			}
 			msgBytes, err := json.Marshal(want)
 			if err != nil {
-				log.Fatal("Error encoding message", err)
+				log.Println("Error encoding message: ", err)
 			}
 			err = getTopic.Publish(ctx, msgBytes)
 			if err != nil {
-				log.Fatal("Error publishing message", err)
+				log.Println("Error publishing message: ", err)
 			}
 		}
 		if blockchainHeight == localHeight {
@@ -140,12 +140,12 @@ func processGet(
 			continue
 		}
 		if err != nil {
-			log.Fatal("Error getting want message: ", err)
+			log.Println("Error getting want message: ", err)
 		}
 		var blockIds []uint
 		err = json.Unmarshal(msg.Data, &blockIds)
 		if err != nil {
-			log.Fatal("Error converting want message: ", err)
+			log.Println("Error converting want message: ", err)
 		}
 		log.Println("WANT block_id(s):", blockIds)
 		for _, blockId := range blockIds {
@@ -155,11 +155,11 @@ func processGet(
 				blocks := []Block{*block}
 				bytes, err := json.Marshal(blocks)
 				if err != nil {
-					log.Fatal("Error converting block to data: ", err)
+					log.Println("Error converting block to data: ", err)
 				}
 				err = dataTopic.Publish(ctx, bytes)
 				if err != nil {
-					log.Fatal("Error publishing data message: ", err)
+					log.Println("Error publishing data message: ", err)
 				}
 				// log.Println("SENT", blockId)
 			} else {
@@ -210,12 +210,12 @@ func processData(
 			continue
 		}
 		if err != nil {
-			log.Fatal("Error getting data message: ", err)
+			log.Println("Error getting data message: ", err)
 		}
 		var blocks Blocks
 		err = json.Unmarshal(msg.Data, &blocks)
 		if err != nil {
-			log.Fatal("Error converting data message: ", err)
+			log.Println("Error converting data message: ", err)
 		}
 		for _, block := range blocks {
 			if msg.ReceivedFrom.String() == peerId {
@@ -641,6 +641,33 @@ func initNode(path0 string) {
 	}
 }
 
+func resetNode(path0 string) {
+	log.Println("Resetting node to block height 0...")
+	var path string
+	if path0 == "" {
+		path = ".node"
+	} else {
+		path = path0
+	}
+
+	pathToDb := path + "/blockchain.db"
+	if _, err := os.Stat(pathToDb); errors.Is(err, os.ErrNotExist) {
+		db, err := sql.Open("sqlite3", pathToDb)
+		if err != nil {
+			log.Fatal("Error when opening DB file: ", err)
+		}
+		_, err = db.Exec(resetDbSql)
+		if err != nil {
+			log.Fatal("Error when resetting DB: ", err)
+		}
+		err = db.Close()
+		if err != nil {
+			log.Fatal("Error closing DB: ", err)
+		}
+		log.Println("Reset DB")
+	}
+}
+
 func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) *drouting.RoutingDiscovery {
 
 	// Let's connect to the bootstrap nodes first. They will tell us about the
@@ -695,6 +722,7 @@ func main() {
 	log0.SetAllLoggers(log0.LevelWarn)
 
 	init := flag.Bool("init", false, "init node")
+	reset := flag.Bool("reset", false, "reset node")
 	configPath := flag.String("config", ".node", "path to config file")
 	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
 	flag.Parse()
@@ -702,6 +730,9 @@ func main() {
 	if *init {
 		initNode(*configPath)
 		os.Exit(0)
+	}
+	if *reset {
+		resetNode(*configPath)
 	}
 
 	log.Println("Loading config from", *configPath)
