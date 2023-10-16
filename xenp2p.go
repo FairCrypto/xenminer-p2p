@@ -642,30 +642,30 @@ func initNode(path0 string) {
 }
 
 func resetNode(path0 string) {
-	log.Println("Resetting node to block height 0...")
-	var path string
-	if path0 == "" {
-		path = ".node"
-	} else {
-		path = path0
+	err := godotenv.Load(path0 + "/.env")
+	var dbPath = ""
+	if err != nil {
+		err = nil
+	}
+	dbPath = os.Getenv("DB_LOCATION")
+	if dbPath == "" {
+		dbPath = path0 + "/blockchain.db"
 	}
 
-	pathToDb := path + "/blockchain.db"
-	if _, err := os.Stat(pathToDb); errors.Is(err, os.ErrNotExist) {
-		db, err := sql.Open("sqlite3", pathToDb)
-		if err != nil {
-			log.Fatal("Error when opening DB file: ", err)
-		}
-		_, err = db.Exec(resetDbSql)
-		if err != nil {
-			log.Fatal("Error when resetting DB: ", err)
-		}
-		err = db.Close()
-		if err != nil {
-			log.Fatal("Error closing DB: ", err)
-		}
-		log.Println("Reset DB")
+	log.Println("Resetting node to block height 0: ", dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		log.Fatal("Error when opening DB file: ", err)
 	}
+	_, err = db.Exec(resetDbSql)
+	if err != nil {
+		log.Fatal("Error when resetting DB: ", err)
+	}
+	err = db.Close()
+	if err != nil {
+		log.Fatal("Error closing DB: ", err)
+	}
+	log.Println("Reset DB")
 }
 
 func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) *drouting.RoutingDiscovery {
