@@ -136,6 +136,7 @@ func processBlockHeight(ctx context.Context) {
 		if blockchainHeight == localHeight {
 			logger.Debug("IN SYNC", localHeight, "=", blockchainHeight)
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -179,6 +180,7 @@ func processGet(ctx context.Context) {
 				err = nil
 			}
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -252,6 +254,7 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
