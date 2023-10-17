@@ -26,6 +26,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
+	"go.uber.org/zap/zapcore"
 	"log"
 	"math"
 	"os"
@@ -80,33 +81,45 @@ type Height struct {
 
 type Blocks []Block
 
+type Topics struct {
+	blockHeight *pubsub.Topic
+	data        *pubsub.Topic
+	get         *pubsub.Topic
+}
+
+type Subs struct {
+	blockHeight *pubsub.Subscription
+	data        *pubsub.Subscription
+	get         *pubsub.Subscription
+}
+
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 
-func processBlockHeight(
-	peerId string,
-	ctx context.Context,
-	blockHeightSub *pubsub.Subscription,
-	getTopic *pubsub.Topic,
-	db *sql.DB,
-) {
+func processBlockHeight(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
+	db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	for {
-		msg, err := blockHeightSub.Next(ctx)
+		msg, err := subs.blockHeight.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		}
 		if err != nil {
-			log.Println("Error getting message: ", err)
+			logger.Warn("Error getting message: ", err)
 		}
 		var blockchainHeight uint
 		err = json.Unmarshal(msg.Data, &blockchainHeight)
 		if err != nil {
-			log.Println("Error decoding message: ", err)
+			logger.Warn("Error decoding message: ", err)
 		}
 
 		localHeight := getCurrentHeight(db)
 		if blockchainHeight > localHeight && peerId != masterPeerId {
-			log.Println("DIFF", localHeight, "<", blockchainHeight)
+			logger.Debug("DIFF", localHeight, "<", blockchainHeight)
 			delta := uint(math.Min(float64(blockchainHeight-localHeight), 5))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
@@ -114,40 +127,40 @@ func processBlockHeight(
 			}
 			msgBytes, err := json.Marshal(want)
 			if err != nil {
-				log.Println("Error encoding message: ", err)
+				logger.Warn("Error encoding message: ", err)
 			}
-			err = getTopic.Publish(ctx, msgBytes)
+			err = topics.get.Publish(ctx, msgBytes)
 			if err != nil {
-				log.Println("Error publishing message: ", err)
+				logger.Warn("Error publishing message: ", err)
 			}
 		}
 		if blockchainHeight == localHeight {
-			log.Println("IN SYNC", localHeight, "=", blockchainHeight)
+			logger.Debug("IN SYNC", localHeight, "=", blockchainHeight)
 		}
 	}
 }
 
-func processGet(
-	peerId string,
-	ctx context.Context,
-	getSub *pubsub.Subscription,
-	dataTopic *pubsub.Topic,
-	db *sql.DB,
-) {
+func processGet(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
+	db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	for {
-		msg, err := getSub.Next(ctx)
+		msg, err := subs.get.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		}
 		if err != nil {
-			log.Println("Error getting want message: ", err)
+			logger.Warn("Error getting want message: ", err)
 		}
 		var blockIds []uint
 		err = json.Unmarshal(msg.Data, &blockIds)
 		if err != nil {
-			log.Println("Error converting want message: ", err)
+			logger.Warn("Error converting want message: ", err)
 		}
-		log.Println("WANT block_id(s):", blockIds)
+		logger.Debug("WANT block_id(s):", blockIds)
 		for _, blockId := range blockIds {
 			block, err := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
@@ -155,27 +168,27 @@ func processGet(
 				blocks := []Block{*block}
 				bytes, err := json.Marshal(blocks)
 				if err != nil {
-					log.Println("Error converting block to data: ", err)
+					logger.Warn("Error converting block to data: ", err)
 				}
-				err = dataTopic.Publish(ctx, bytes)
+				err = topics.data.Publish(ctx, bytes)
 				if err != nil {
-					log.Println("Error publishing data message: ", err)
+					logger.Warn("Error publishing data message: ", err)
 				}
-				// log.Println("SENT", blockId)
+				// logger.Info("SENT", blockId)
 			} else {
-				log.Println("!BLOCK", blockId)
+				logger.Debug("!BLOCK", blockId)
 				err = nil
 			}
 		}
 	}
 }
 
-func validateBlock(block Block) (bool, error) {
+func validateBlock(block Block, logger log0.EventLogger) (bool, error) {
 	recordsJson := block.RecordsJson
 	var records []Record
 	err := json.Unmarshal([]byte(recordsJson), &records)
 	if err != nil {
-		log.Println("Error converting records JSON: ", err)
+		logger.Warn("Error converting records JSON: ", err)
 	}
 
 	toHash := func(record Record, index int) string {
@@ -198,59 +211,59 @@ func validateBlock(block Block) (bool, error) {
 	return merkleRoot == block.MerkleRoot, err
 }
 
-func processData(
-	peerId string,
-	ctx context.Context,
-	dataSub *pubsub.Subscription,
-	db *sql.DB,
-) {
+func processData(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	for {
-		msg, err := dataSub.Next(ctx)
+		msg, err := subs.data.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		}
 		if err != nil {
-			log.Println("Error getting data message: ", err)
+			logger.Warn("Error getting data message: ", err)
 		}
 		var blocks Blocks
 		err = json.Unmarshal(msg.Data, &blocks)
 		if err != nil {
-			log.Println("Error converting data message: ", err)
+			logger.Warn("Error converting data message: ", err)
 		}
 		for _, block := range blocks {
 			if msg.ReceivedFrom.String() == peerId {
-				log.Println("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
+				logger.Debug("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
 			}
 			if block.Id > 1 {
 				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
-					// log.Println("Error when processing row: ", err)
+					// logger.Warn("Error when processing row: ", err)
 					continue
 				}
 				if prevBlock.BlockHash != block.PrevHash {
-					log.Println("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+					logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
 					continue
 				}
 			}
-			blockIsValid, err := validateBlock(block)
+			blockIsValid, err := validateBlock(block, logger)
 			if peerId != masterPeerId && blockIsValid {
 				err = insertBlock(db, &block)
 				if err != nil {
-					log.Println("Error adding block to DB: ", err)
+					logger.Warn("Error adding block to DB: ", err)
 				}
 			}
 		}
 	}
 }
 
-func loadPeerParams(path string) (multiaddr.Multiaddr, crypto.PrivKey, string) {
+func loadPeerParams(path string, logger log0.EventLogger) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 	content, err := os.ReadFile(path + "/peer.json")
 	if err != nil {
-		log.Fatal("Error when opening file: ", err)
+		logger.Error("Error when opening file: ", err)
 	}
 	err = godotenv.Load(path + "/.env")
 	if err != nil {
-		log.Fatal("Error loading ENV: ", err)
+		logger.Error("Error loading ENV: ", err)
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -261,32 +274,35 @@ func loadPeerParams(path string) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 	var peerId PeerId
 	err = json.Unmarshal(content, &peerId)
 	if err != nil {
-		log.Fatal("Error reading Peer config file: ", err)
+		logger.Error("Error reading Peer config file: ", err)
 	}
-	log.Println("PeerId: ", peerId.Id)
+	logger.Info("PeerId: ", peerId.Id)
 
 	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", port))
 	if err != nil {
-		log.Fatal("Error making address: ", err)
+		logger.Error("Error making address: ", err)
 	}
 
 	sk, err := base64.StdEncoding.DecodeString(peerId.PrivKey)
 	if err != nil {
-		log.Fatal("Error base64-decoding pk: ", err)
+		logger.Error("Error base64-decoding pk: ", err)
 	}
 
 	privKey, err := crypto.UnmarshalPrivateKey(sk)
 	if err != nil {
-		log.Fatal("Error converting pk: ", err)
+		logger.Error("Error converting pk: ", err)
+	}
+	if err != nil {
+		panic(err)
 	}
 
 	return addr, privKey, peerId.Id
 }
 
-func prepareBootstrapAddresses(path string) []string {
+func prepareBootstrapAddresses(path string, logger log0.EventLogger) []string {
 	err := godotenv.Load(path + "/.env")
 	if err != nil {
-		log.Fatal("Error loading ENV: ", err)
+		logger.Error("Error loading ENV: ", err)
 	}
 	notEmpty := func(item string, index int) bool {
 		return item != ""
@@ -309,44 +325,42 @@ func prepareBootstrapAddresses(path string) []string {
 	return destinations
 }
 
-func subscribeToTopics(ps *pubsub.PubSub) (
-	*pubsub.Subscription,
-	*pubsub.Subscription,
-	*pubsub.Subscription,
-	*pubsub.Topic,
-	*pubsub.Topic,
-	*pubsub.Topic,
-) {
-	blockHeightTopic, err := ps.Join("block_height")
+func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topics, subs Subs) {
+	var err error
+	topics.blockHeight, err = ps.Join("block_height")
 	if err != nil {
-		log.Fatal("Error joining topic", err)
+		logger.Error("Error joining topic", err)
 	}
-	blockHeightSub, err := blockHeightTopic.Subscribe()
+	subs.blockHeight, err = topics.blockHeight.Subscribe()
 	if err != nil {
-		log.Fatal("Error subscribing to topic", err)
+		logger.Error("Error subscribing to topic", err)
 	}
 
-	getTopic, err := ps.Join("get")
+	topics.get, err = ps.Join("get")
 	if err != nil {
-		log.Fatal("Error joining topic", err)
+		logger.Error("Error joining topic", err)
 	}
-	getSub, err := getTopic.Subscribe()
+	subs.get, err = topics.get.Subscribe()
 	if err != nil {
-		log.Fatal("Error subscribing to topic", err)
+		logger.Error("Error subscribing to topic", err)
 	}
 
-	dataTopic, err := ps.Join("data")
+	topics.data, err = ps.Join("data")
 	if err != nil {
-		log.Fatal("Error joining topic", err)
+		logger.Error("Error joining topic", err)
 	}
-	dataSub, err := dataTopic.Subscribe()
+	subs.data, err = topics.data.Subscribe()
 	if err != nil {
-		log.Fatal("Error subscribing to topic", err)
+		logger.Error("Error subscribing to topic", err)
 	}
-	return blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic
+
+	if err != nil {
+		panic(err)
+	}
+	return
 }
 
-func setupDB(path string, ro bool) *sql.DB {
+func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	err := godotenv.Load(path + "/.env")
 	var dbPath = ""
 	if err != nil {
@@ -372,7 +386,7 @@ func setupDB(path string, ro bool) *sql.DB {
 	}
 
 	maxHeight := getCurrentHeight(db)
-	log.Println("HGHT", maxHeight)
+	logger.Info("HGHT ", maxHeight)
 
 	return db
 }
@@ -402,7 +416,10 @@ var toAddrInfo = func(destination string, _ int) peer.AddrInfo {
 	return *info
 }
 
-func connectToPeer(ctx context.Context, h host.Host, destination string) {
+func connectToPeer(ctx context.Context, destination string) {
+	h := ctx.Value("host").(host.Host)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	// Turn the destination into a multiaddr.
 	info := toAddrInfo(destination, 0)
 	// Add the destination's peer multiaddress in the peerstore.
@@ -410,16 +427,18 @@ func connectToPeer(ctx context.Context, h host.Host, destination string) {
 	h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 	err := h.Connect(ctx, info)
 	if err != nil {
-		log.Println("Error connecting: ", err)
+		logger.Warn("Error connecting: ", err)
 	}
 }
 
-func setupConnections(ctx context.Context, h host.Host, destinations []string) {
-	log.Println(destinations)
+func setupConnections(ctx context.Context, destinations []string) {
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	logger.Info("destinations", destinations)
 
 	for _, dest := range destinations {
-		connectToPeer(ctx, h, dest)
-		log.Println("Connect to: ", dest)
+		connectToPeer(ctx, dest)
+		logger.Info("Connect to: ", dest)
 	}
 }
 
@@ -441,7 +460,11 @@ func hasDestination(destinations []string, p string) bool {
 	return false
 }
 
-func checkConnections(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) {
+func checkConnections(ctx context.Context, destinations []string) {
+	h := ctx.Value("host").(host.Host)
+	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
@@ -451,8 +474,8 @@ func checkConnections(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destin
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 			peers := h.Peerstore().Peers()
-			size, _ := dht.NetworkSize()
-			log.Println(size, peers)
+			size, _ := dhTable.NetworkSize()
+			logger.Info(size, peers)
 			// for _, addr := range destinations {
 			//	if !hasPeer(peers, addr) {
 			//		connectToPeer(ctx, h, addr)
@@ -466,12 +489,10 @@ func checkConnections(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destin
 	}
 }
 
-func discoverPeers(
-	ctx context.Context,
-	h host.Host,
-	disc *drouting.RoutingDiscovery,
-	destinations []string,
-) {
+func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destinations []string) {
+	h := ctx.Value("host").(host.Host)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
 	t := time.NewTicker(20 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
@@ -485,23 +506,24 @@ func discoverPeers(
 			options = append(options, discovery.TTL(10*time.Minute))
 			t, err := disc.Advertise(ctx, rendezvousString, options...)
 			peerChan, err := disc.FindPeers(ctx, rendezvousString)
-			log.Println("Searching for other peers ", t.String())
+			logger.Info("Searching for other peers ", t.String())
 			if err != nil {
-				log.Println(err)
+				logger.Warn(err)
 			}
 
 			for p := range peerChan {
+				logger.Info("Maybe peer:", p)
 				if p.ID == h.ID() ||
 					hasDestination(destinations, p.ID.String()) ||
 					hasPeer(h.Peerstore().Peers(), p.ID.String()) {
 					continue
 				}
-				log.Println("Found peer:", p)
+				logger.Info("Found peer:", p)
 				err = h.Connect(ctx, p)
 				if err != nil {
-					log.Println("Error connecting to peer: ", err)
+					logger.Warn("Error connecting to peer: ", err)
 				}
-				log.Println("Connected to:", p)
+				logger.Info("Connected to:", p)
 			}
 
 		case <-quit:
@@ -512,7 +534,7 @@ func discoverPeers(
 
 }
 
-func checkPubsubPeers(ps *pubsub.PubSub) {
+func checkPubsubPeers(ps *pubsub.PubSub, logger log0.EventLogger) {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
@@ -526,7 +548,7 @@ func checkPubsubPeers(ps *pubsub.PubSub) {
 			dPeers := ps.ListPeers("data")
 			gPeers := ps.ListPeers("get")
 
-			log.Println("PEERS", bhPeers, dPeers, gPeers)
+			logger.Info("PEERS", bhPeers, dPeers, gPeers)
 
 		case <-quit:
 			t.Stop()
@@ -535,7 +557,10 @@ func checkPubsubPeers(ps *pubsub.PubSub) {
 	}
 }
 
-func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB) {
+func broadcastBlockHeight(ctx context.Context) {
+	topics := ctx.Value("topics").(Topics)
+	db := ctx.Value("db").(*sql.DB)
+
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
@@ -548,7 +573,7 @@ func broadcastBlockHeight(ctx context.Context, topic *pubsub.Topic, db *sql.DB) 
 			if err != nil {
 				log.Fatal("Error converting block_height", err)
 			}
-			err = topic.Publish(ctx, bytes)
+			err = topics.blockHeight.Publish(ctx, bytes)
 			if err != nil {
 				log.Fatal("Error publishing message", err)
 			}
@@ -581,8 +606,8 @@ func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time
 	}
 }
 
-func initNode(path0 string) {
-	log.Println("Initializing node cfg and DB")
+func initNode(path0 string, logger log0.EventLogger) {
+	logger.Info("Initializing node cfg and DB")
 	var path string
 	if path0 == "" {
 		path = ".node"
@@ -593,10 +618,10 @@ func initNode(path0 string) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
-			log.Println(err)
+			logger.Warn(err)
 		}
 	}
-	log.Println("Created dir")
+	logger.Info("Created dir")
 	pathToDb := path + "/blockchain.db"
 	if _, err := os.Stat(pathToDb); errors.Is(err, os.ErrNotExist) {
 		db, err := sql.Open("sqlite3", pathToDb)
@@ -611,7 +636,7 @@ func initNode(path0 string) {
 		if err != nil {
 			log.Fatal("Error closing DB: ", err)
 		}
-		log.Println("Created DB")
+		logger.Info("Created DB")
 	}
 
 	pathToPeerId := path + "/peer.json"
@@ -637,11 +662,11 @@ func initNode(path0 string) {
 		if err != nil {
 			log.Fatal("Error writing peerId file: ", err)
 		}
-		log.Println("Created peerId file")
+		logger.Info("Created peerId file")
 	}
 }
 
-func resetNode(path0 string) {
+func resetNode(path0 string, logger log0.EventLogger) {
 	err := godotenv.Load(path0 + "/.env")
 	var dbPath = ""
 	if err != nil {
@@ -652,7 +677,7 @@ func resetNode(path0 string) {
 		dbPath = path0 + "/blockchain.db"
 	}
 
-	log.Println("Resetting node to block height 0: ", dbPath)
+	logger.Info("Resetting node to block height 0: ", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Error when opening DB file: ", err)
@@ -665,10 +690,13 @@ func resetNode(path0 string) {
 	if err != nil {
 		log.Fatal("Error closing DB: ", err)
 	}
-	log.Println("Reset DB")
+	logger.Info("Reset DB")
 }
 
-func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinations []string) *drouting.RoutingDiscovery {
+func setupDiscovery(ctx context.Context, destinations []string) *drouting.RoutingDiscovery {
+	h := ctx.Value("host").(host.Host)
+	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
+	logger := ctx.Value("logger").(log0.EventLogger)
 
 	// Let's connect to the bootstrap nodes first. They will tell us about the
 	// other nodes in the network.
@@ -680,9 +708,9 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 			go func() {
 				defer wg.Done()
 				if err := h.Connect(ctx, peerInfo); err != nil {
-					log.Println(err)
+					logger.Warn(err)
 				} else {
-					log.Println("Connection established with bootstrap node:", peerInfo)
+					logger.Warn("Connection established with bootstrap node:", peerInfo)
 				}
 			}()
 		}
@@ -691,27 +719,27 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
-	routingDiscovery := drouting.NewRoutingDiscovery(dht)
+	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
 	dutil.Advertise(ctx, routingDiscovery, rendezvousString)
-	log.Println("Started announcing")
+	logger.Info("Started announcing")
 
-	log.Println("Searching for other peers")
+	logger.Info("Searching for other peers")
 	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
 	if err != nil {
-		log.Println(err)
+		logger.Warn(err)
 	}
 
 	for p := range peerChan {
-		log.Println("Peer candidate: ", p)
+		logger.Info("Peer candidate: ", p)
 		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
 			continue
 		}
-		log.Println("Found peer:", p)
+		logger.Info("Found peer:", p)
 		err = h.Connect(ctx, p)
 		if err != nil {
-			log.Println("Error connecting to peer: ", err)
+			logger.Warn("Error connecting to peer: ", err)
 		}
-		log.Println("Connected to:", p)
+		logger.Info("Connected to:", p)
 	}
 	return routingDiscovery
 
@@ -719,41 +747,51 @@ func setupDiscovery(ctx context.Context, h host.Host, dht *dht.IpfsDHT, destinat
 
 func main() {
 
-	log0.SetAllLoggers(log0.LevelWarn)
+	logger := log0.Logger("xen-blocks")
 
 	init := flag.Bool("init", false, "init node")
 	reset := flag.Bool("reset", false, "reset node")
 	configPath := flag.String("config", ".node", "path to config file")
 	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
+	logLevel := flag.String("log", "warn", "log level")
 	flag.Parse()
 
+	if *logLevel != "" {
+		level, _ := zapcore.ParseLevel(*logLevel)
+		log0.SetAllLoggers(log0.LogLevel(level))
+	} else {
+		log0.SetAllLoggers(log0.LevelWarn)
+	}
+
 	if *init {
-		initNode(*configPath)
+		initNode(*configPath, logger)
 		os.Exit(0)
 	}
 	if *reset {
-		resetNode(*configPath)
+		resetNode(*configPath, logger)
 	}
 
-	log.Println("Loading config from", *configPath)
-	log.Println("Starting Node")
+	logger.Info("Loading config from", *configPath)
+	logger.Info("Starting Node")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	ctx = context.WithValue(ctx, "logger", logger)
 
 	// setup DB and check / init table(s)
-	db := setupDB(*configPath, *readOnlyDB)
+	db := setupDB(*configPath, *readOnlyDB, logger)
 	ctx = context.WithValue(ctx, "db", db)
 	defer func(db *sql.DB) {
 		_ = db.Close()
 	}(db)
 
 	// load peer params from config file
-	addr, privKey, peerId := loadPeerParams(*configPath)
+	addr, privKey, peerId := loadPeerParams(*configPath, logger)
+	ctx = context.WithValue(ctx, "peerId", peerId)
 	if peerId == masterPeerId {
-		log.Println("Master Node")
+		logger.Info("Master Node")
 	} else {
-		log.Println("Peer Node")
+		logger.Info("Peer Node")
 	}
 
 	// construct a libp2p Host.
@@ -764,7 +802,7 @@ func main() {
 	}(h)
 
 	// setup connections to bootstrap peers
-	destinations := prepareBootstrapAddresses(*configPath)
+	destinations := prepareBootstrapAddresses(*configPath, logger)
 	peers := lo.Map(destinations, toAddrInfo)
 
 	// setup DHT discovery
@@ -772,7 +810,7 @@ func main() {
 	if len(destinations) == 0 {
 		// options = append(options, dht.Mode(dht.ModeServer))
 	} else {
-		options = append(options, dht.Mode(dht.ModeClient))
+		// options = append(options, dht.Mode(dht.ModeClient))
 		options = append(options, dht.BootstrapPeers(peers...))
 	}
 	kademliaDHT, err := dht.New(ctx, h, options...)
@@ -786,17 +824,17 @@ func main() {
 
 	// setupDiscovery(ctx, h, kademliaDHT, destinations)
 	var disc *drouting.RoutingDiscovery
-	disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
+	disc = setupDiscovery(ctx, destinations)
 	if len(destinations) > 0 {
 		// disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
-		// log.Println(disc)
+		// logger.Info(disc)
 	} else {
 		// setupConnections(ctx, h, destinations)
 	}
 
 	// Bootstrap the DHT. In the default configuration, this spawns a Background
 	// thread that will refresh the peer table every five minutes.
-	// log.Println("Bootstrapping the DHT")
+	// logger.Info("Bootstrapping the DHT")
 	// if err = kademliaDHT.Bootstrap(ctx); err != nil {
 	// 	panic(err)
 	// }
@@ -809,30 +847,42 @@ func main() {
 	ps, err := pubsub.NewGossipSub(ctx, h, discOptions...)
 	ctx = context.WithValue(ctx, "pubsub", ps)
 	if err != nil {
-		log.Fatal("Error starting pubsub protocol", err)
+		logger.Error("Error starting pubsub protocol", err)
+		panic(err)
 	}
 
-	log.Println("Started: ", peerId)
+	logger.Info("Started: ", peerId)
 
 	// subscribe to essential topics
-	blockHeightSub, dataSub, getSub, blockHeightTopic, dataTopic, getTopic := subscribeToTopics(ps)
+	topics, subs := subscribeToTopics(ps, logger)
+	ctx = context.WithValue(ctx, "topics", topics)
+	ctx = context.WithValue(ctx, "subs", subs)
 
 	var wg sync.WaitGroup
-	wg.Add(6)
 	// spawn message processing by topics
-	go processBlockHeight(peerId, ctx, blockHeightSub, getTopic, db)
-	go processData(peerId, ctx, dataSub, db)
-	go processGet(peerId, ctx, getSub, dataTopic, db)
+	go processBlockHeight(ctx)
+	wg.Add(1)
+
+	go processData(ctx)
+	wg.Add(1)
+
+	go processGet(ctx)
+	wg.Add(1)
 
 	// check / renew connections periodically
-	go broadcastBlockHeight(ctx, blockHeightTopic, db)
+	go broadcastBlockHeight(ctx)
+	wg.Add(1)
 
-	go checkConnections(ctx, h, kademliaDHT, destinations)
+	// go checkConnections(ctx, destinations)
+	// wg.Add(1)
+
 	// go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
 
 	// if len(destinations) > 0 {
-	go discoverPeers(ctx, h, disc, destinations)
+	// go discoverPeers(ctx, disc, destinations)
+	// wg.Add(1)
+
 	// } else {
 	// go checkConnections(ctx, h, destinations)
 	// }
