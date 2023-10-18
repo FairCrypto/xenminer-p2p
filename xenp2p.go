@@ -118,7 +118,7 @@ func processBlockHeight(ctx context.Context) {
 
 		localHeight := getCurrentHeight(db)
 		if blockchainHeight > localHeight && peerId != masterPeerId {
-			logger.Debug("DIFF", localHeight, "<", blockchainHeight)
+			logger.Info("DIFF", localHeight, "<", blockchainHeight)
 			delta := uint(math.Min(float64(blockchainHeight-localHeight), 5))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
@@ -134,7 +134,7 @@ func processBlockHeight(ctx context.Context) {
 			}
 		}
 		if blockchainHeight == localHeight {
-			logger.Debug("IN SYNC", localHeight, "=", blockchainHeight)
+			logger.Info("IN SYNC", localHeight, "=", blockchainHeight)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -755,6 +755,7 @@ func main() {
 	reset := flag.Bool("reset", false, "reset node")
 	configPath := flag.String("config", ".node", "path to config file")
 	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
+	client := flag.Bool("client", false, "start in client-only mode")
 	logLevel := flag.String("log", "warn", "log level")
 	flag.Parse()
 
@@ -793,7 +794,11 @@ func main() {
 	if peerId == masterPeerId {
 		logger.Info("Master Node")
 	} else {
-		logger.Info("Peer Node")
+		if *client {
+			logger.Info("Client Node")
+		} else {
+			logger.Info("Peer Node")
+		}
 	}
 
 	// construct a libp2p Host.
@@ -807,31 +812,29 @@ func main() {
 	destinations := prepareBootstrapAddresses(*configPath, logger)
 	peers := lo.Map(destinations, toAddrInfo)
 
-	// setup DHT discovery
-	var options []dht.Option
-	if len(destinations) == 0 {
-		// options = append(options, dht.Mode(dht.ModeServer))
-	} else {
-		// options = append(options, dht.Mode(dht.ModeClient))
-		options = append(options, dht.BootstrapPeers(peers...))
-	}
-	kademliaDHT, err := dht.New(ctx, h, options...)
-	if err != nil {
-		panic(err)
-	}
-	ctx = context.WithValue(ctx, "dht", kademliaDHT)
-	defer func(kademliaDHT *dht.IpfsDHT) {
-		_ = kademliaDHT.Close()
-	}(kademliaDHT)
-
-	// setupDiscovery(ctx, h, kademliaDHT, destinations)
 	var disc *drouting.RoutingDiscovery
-	disc = setupDiscovery(ctx, destinations)
-	if len(destinations) > 0 {
-		// disc = setupDiscovery(ctx, h, kademliaDHT, destinations)
-		// logger.Info(disc)
+	if *client {
+		setupConnections(ctx, destinations)
 	} else {
-		// setupConnections(ctx, h, destinations)
+		var dhtOptions []dht.Option
+		if len(destinations) > 0 {
+			dhtOptions = append(dhtOptions, dht.BootstrapPeers(peers...))
+		}
+		if *client {
+			// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
+			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
+		}
+
+		kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
+		if err != nil {
+			panic(err)
+		}
+		ctx = context.WithValue(ctx, "dht", kademliaDHT)
+		defer func(kademliaDHT *dht.IpfsDHT) {
+			_ = kademliaDHT.Close()
+		}(kademliaDHT)
+
+		disc = setupDiscovery(ctx, destinations)
 	}
 
 	// Bootstrap the DHT. In the default configuration, this spawns a Background
@@ -842,11 +845,13 @@ func main() {
 	// }
 
 	// setup pubsub protocol (either floodsub or gossip)
-	var discOptions []pubsub.Option
-	discOptions = append(discOptions, pubsub.WithDirectPeers(peers))
-	discOptions = append(discOptions, pubsub.WithDiscovery(disc))
-	// ps, err := pubsub.NewFloodSub(ctx, h, discOptions...)
-	ps, err := pubsub.NewGossipSub(ctx, h, discOptions...)
+	var pubsubOptions []pubsub.Option
+	pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+	if !*client {
+		pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
+	}
+	// ps, err := pubsub.NewFloodSub(ctx, h, pubsubOptions...)
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsubOptions...)
 	ctx = context.WithValue(ctx, "pubsub", ps)
 	if err != nil {
 		logger.Error("Error starting pubsub protocol", err)
