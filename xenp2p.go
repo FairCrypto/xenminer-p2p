@@ -708,6 +708,7 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			h.Peerstore().AddAddrs(peerInfo.ID, peerInfo.Addrs, peerstore.PermanentAddrTTL)
 			if err := h.Connect(ctx, peerInfo); err != nil {
 				logger.Warn(err)
 			} else {
