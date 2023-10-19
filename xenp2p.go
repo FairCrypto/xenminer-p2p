@@ -16,7 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -371,11 +370,11 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	}
 	dbPath = os.Getenv("DB_LOCATION")
 	if dbPath == "" {
-		dbPath = path + "/blockchain.db"
+		dbPath = "file:" + path + "/blockchain.db?cache=shared&journal_mode=WAL&"
 	}
 	if ro {
 		// add read-only flag
-		dbPath += "?mode=ro"
+		dbPath += "mode=ro"
 	}
 
 	db, err := sql.Open("sqlite3", dbPath)
@@ -490,6 +489,7 @@ func checkConnections(ctx context.Context, destinations []string) {
 	}
 }
 
+/*
 func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destinations []string) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
@@ -534,35 +534,13 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 	}
 
 }
-
-func checkPubsubPeers(ps *pubsub.PubSub, logger log0.EventLogger) {
-	t := time.NewTicker(5 * time.Second)
-	defer t.Stop()
-	quit := make(chan struct{})
-
-	for {
-		select {
-		case <-t.C:
-			// check if peer is not connected and try to reconnect
-
-			bhPeers := ps.ListPeers("block_height")
-			dPeers := ps.ListPeers("data")
-			gPeers := ps.ListPeers("get")
-
-			logger.Info("PEERS", bhPeers, dPeers, gPeers)
-
-		case <-quit:
-			t.Stop()
-			return
-		}
-	}
-}
+*/
 
 func broadcastBlockHeight(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	db := ctx.Value("db").(*sql.DB)
 
-	t := time.NewTicker(2 * time.Second)
+	t := time.NewTicker(20 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 
@@ -577,28 +555,6 @@ func broadcastBlockHeight(ctx context.Context) {
 			err = topics.blockHeight.Publish(ctx, bytes)
 			if err != nil {
 				log.Fatal("Error publishing message", err)
-			}
-		case <-quit:
-			t.Stop()
-			return
-		}
-	}
-}
-
-func doHousekeeping(ctx context.Context, topic *pubsub.Topic, db *sql.DB, t time.Ticker, quit <-chan struct{}) {
-	for {
-		select {
-		case <-t.C:
-			blocks := getMissingBlocks(db)
-			if len(blocks) > 0 {
-				bytes, err := json.Marshal(blocks)
-				if err != nil {
-					log.Fatal("Error converting block_id: ", err)
-				}
-				err = topic.Publish(ctx, bytes)
-				if err != nil {
-					log.Fatal("Error publishing message: ", err)
-				}
 			}
 		case <-quit:
 			t.Stop()
@@ -886,16 +842,12 @@ func main() {
 		go checkConnections(ctx, destinations)
 	}
 
-	// go checkPubsubPeers(ps)
-	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
-
-	// if len(destinations) > 0 {
-	// go discoverPeers(ctx, disc, destinations)
-	// wg.Add(1)
-
-	// } else {
-	// go checkConnections(ctx, h, destinations)
-	// }
+	/*
+		if len(destinations) > 0 {
+			wg.Add(1)
+			go discoverPeers(ctx, disc, destinations)
+		}
+	*/
 
 	// wait until interrupted
 	wg.Wait()
