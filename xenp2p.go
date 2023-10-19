@@ -94,6 +94,7 @@ type Subs struct {
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
+const yieldTime = 100 * time.Millisecond
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
@@ -136,7 +137,7 @@ func processBlockHeight(ctx context.Context) {
 		if blockchainHeight == localHeight {
 			logger.Info("IN SYNC", localHeight, "=", blockchainHeight)
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(yieldTime)
 	}
 }
 
@@ -180,7 +181,7 @@ func processGet(ctx context.Context) {
 				err = nil
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(yieldTime)
 	}
 }
 
@@ -254,7 +255,7 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(yieldTime)
 	}
 }
 
@@ -446,7 +447,7 @@ func setupConnections(ctx context.Context, destinations []string) {
 
 func hasPeer(peers peer.IDSlice, p string) bool {
 	for i := 0; i < peers.Len(); i++ {
-		if peers[i].String() == p {
+		if strings.HasSuffix(p, peers[i].String()) {
 			return true
 		}
 	}
@@ -464,7 +465,6 @@ func hasDestination(destinations []string, p string) bool {
 
 func checkConnections(ctx context.Context, destinations []string) {
 	h := ctx.Value("host").(host.Host)
-	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	t := time.NewTicker(5 * time.Second)
@@ -476,13 +476,12 @@ func checkConnections(ctx context.Context, destinations []string) {
 		case <-t.C:
 			// check if peer is not connected and try to reconnect
 			peers := h.Peerstore().Peers()
-			size, _ := dhTable.NetworkSize()
-			logger.Info(size, peers)
-			// for _, addr := range destinations {
-			//	if !hasPeer(peers, addr) {
-			//		connectToPeer(ctx, h, addr)
-			//	}
-			//}
+			for _, addr := range destinations {
+				if !hasPeer(peers, addr) {
+					logger.Infof("Reconnecting to %s", addr)
+					connectToPeer(ctx, addr)
+				}
+			}
 
 		case <-quit:
 			t.Stop()
@@ -702,22 +701,21 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 
 	// Let's connect to the bootstrap nodes first. They will tell us about the
 	// other nodes in the network.
-	/*
-		var wg sync.WaitGroup
-		for i, peerAddr := range destinations {
-			peerInfo := toAddrInfo(peerAddr, i)
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := h.Connect(ctx, peerInfo); err != nil {
-					logger.Warn(err)
-				} else {
-					logger.Warn("Connection established with bootstrap node:", peerInfo)
-				}
-			}()
-		}
-		wg.Wait()
-	*/
+
+	var wg sync.WaitGroup
+	for i, peerAddr := range destinations {
+		peerInfo := toAddrInfo(peerAddr, i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := h.Connect(ctx, peerInfo); err != nil {
+				logger.Warn(err)
+			} else {
+				logger.Warn("Connection established with bootstrap node:", peerInfo)
+			}
+		}()
+	}
+	wg.Wait()
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
@@ -865,23 +863,27 @@ func main() {
 	ctx = context.WithValue(ctx, "topics", topics)
 	ctx = context.WithValue(ctx, "subs", subs)
 
+	// create a group of async processes
 	var wg sync.WaitGroup
+
 	// spawn message processing by topics
+	wg.Add(1)
 	go processBlockHeight(ctx)
-	wg.Add(1)
 
+	wg.Add(1)
 	go processData(ctx)
-	wg.Add(1)
 
+	wg.Add(1)
 	go processGet(ctx)
-	wg.Add(1)
 
-	// check / renew connections periodically
+	wg.Add(1)
 	go broadcastBlockHeight(ctx)
-	wg.Add(1)
 
-	// go checkConnections(ctx, destinations)
-	// wg.Add(1)
+	if *client {
+		// check / renew connections periodically
+		wg.Add(1)
+		go checkConnections(ctx, destinations)
+	}
 
 	// go checkPubsubPeers(ps)
 	// go doHousekeeping(ctx, getTopic, db, *every5Seconds, make(chan struct{}))
@@ -896,5 +898,5 @@ func main() {
 
 	// wait until interrupted
 	wg.Wait()
-	// select {}
+
 }
