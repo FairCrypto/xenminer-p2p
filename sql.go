@@ -75,4 +75,12 @@ const (
 	getLatestXuniIdSql string = `
 		SELECT MAX(id) as latest_xuni_id FROM xuni;
 	`
+
+	getLatestHashSql string = `
+		SELECT * FROM blocks ORDER BY block_id ASC LIMIT 1;
+	`
+
+	getLatestXuniSql string = `
+		SELECT * FROM xuni ORDER BY id ASC LIMIT 1;
+	`
 )

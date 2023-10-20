@@ -12,6 +12,7 @@ import (
 	log0 "github.com/ipfs/go-log/v2"
 	"github.com/joho/godotenv"
 	"github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -30,8 +31,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 )
 
 type PeerId struct {
@@ -86,12 +85,16 @@ type Height struct {
 type Blocks []Block
 
 type Topics struct {
+	newHash     *pubsub.Topic
+	newXuni     *pubsub.Topic
 	blockHeight *pubsub.Topic
 	data        *pubsub.Topic
 	get         *pubsub.Topic
 }
 
 type Subs struct {
+	newHash     *pubsub.Subscription
+	newXuni     *pubsub.Subscription
 	blockHeight *pubsub.Subscription
 	data        *pubsub.Subscription
 	get         *pubsub.Subscription
@@ -619,6 +622,47 @@ func broadcastBlockHeight(ctx context.Context) {
 	}
 }
 
+func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) {
+	topics := ctx.Value("topics").(Topics)
+	dbh := ctx.Value("dbh").(*sql.DB)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	t := time.NewTicker(500 * time.Millisecond)
+	defer t.Stop()
+	quit := make(chan struct{})
+
+	for {
+		select {
+		case <-t.C:
+			lastHash := getLatestHash(dbh)
+			lastXuni := getLatestXuni(dbh)
+			var hashOrXuni *HashRecord
+			if lastHash.Id > *lastHashId {
+				hashOrXuni = lastHash
+				*lastHashId = lastHash.Id
+				logger.Info("New Hash Id ", lastHashId)
+			}
+			if lastXuni.Id > *lastXuniId {
+				hashOrXuni = lastXuni
+				*lastXuniId = lastXuni.Id
+				logger.Info("New Xuni Id ", lastHashId)
+			}
+
+			bytes, err := json.Marshal(hashOrXuni)
+			if err != nil {
+				log.Fatal("Error converting hash/xuni", err)
+			}
+			err = topics.newHash.Publish(ctx, bytes)
+			if err != nil {
+				log.Fatal("Error publishing message", err)
+			}
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+}
+
 func setupDiscovery(ctx context.Context, destinations []string) *drouting.RoutingDiscovery {
 	h := ctx.Value("host").(host.Host)
 	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
@@ -673,6 +717,9 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 
 func main() {
 
+	var lastHashId uint = 0
+	var lastXuniId uint = 0
+
 	logger := log0.Logger("xen-blocks")
 
 	init := flag.Bool("init", false, "init node")
@@ -712,14 +759,19 @@ func main() {
 
 	// setup DB and check / init table(s)
 	db := setupDB(*configPath, *readOnlyDB, logger)
-
-	_, lastHashId, lastXuniId := setupHashesDB(*configPath, *readOnlyDB, logger)
-	logger.Infof("Latest: hash %d, xuni %d", lastHashId, lastXuniId)
-
 	ctx = context.WithValue(ctx, "db", db)
 	defer func(db *sql.DB) {
 		_ = db.Close()
 	}(db)
+
+	// setup hash/xuni DB and check / init table(s)
+	hdb, lastHashId, lastXuniId := setupHashesDB(*configPath, *readOnlyDB, logger)
+	logger.Infof("Latest: hash %d, xuni %d", lastHashId, lastXuniId)
+
+	ctx = context.WithValue(ctx, "hdb", db)
+	defer func(hdb *sql.DB) {
+		_ = hdb.Close()
+	}(hdb)
 
 	// load peer params from config file
 	addr, privKey, peerId := loadPeerParams(*configPath, logger)
@@ -813,6 +865,11 @@ func main() {
 
 	wg.Add(1)
 	go broadcastBlockHeight(ctx)
+
+	if peerId == masterPeerId {
+		wg.Add(1)
+		go broadcastLastHash(ctx, &lastHashId, &lastXuniId)
+	}
 
 	if *client {
 		// check / renew connections periodically

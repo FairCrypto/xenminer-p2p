@@ -146,6 +146,60 @@ func getLatestXuniId(db *sql.DB) uint {
 	}
 }
 
+func getLatestHash(db *sql.DB) *HashRecord {
+	rows, err := db.Query(getLatestHashSql)
+	if err != nil {
+		log.Println("Error when querying HDB: ", err)
+		return nil
+	}
+	var hash HashRecord
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	rows.Next()
+	err = rows.Scan(
+		&hash.Id,
+		&hash.CreatedAt,
+		&hash.Key,
+		&hash.HashToVerify,
+		&hash.Account,
+	)
+	if err != nil {
+		log.Println("Error retrieving data from HDB: ", err)
+	}
+	return &hash
+}
+
+func getLatestXuni(db *sql.DB) *HashRecord {
+	rows, err := db.Query(getLatestXuniSql)
+	if err != nil {
+		log.Println("Error when querying HDB: ", err)
+		return nil
+	}
+	var hash HashRecord
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	rows.Next()
+	err = rows.Scan(
+		&hash.Id,
+		&hash.CreatedAt,
+		&hash.Key,
+		&hash.HashToVerify,
+		&hash.Account,
+	)
+	if err != nil {
+		log.Println("Error retrieving data from HDB: ", err)
+	}
+	return &hash
+}
+
 func insertHashRecord(db *sql.DB, hashRecord HashRecord) error {
 	_, err := db.Exec(
 		insertHashSql,
