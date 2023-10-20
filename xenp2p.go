@@ -378,13 +378,13 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	if dbPath == "" {
 		dbPath = "file:" + path + "/blockchain.db?cache=shared&_journal_mode=WAL&"
 	} else {
-		dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
+		// dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
 	}
 	if ro {
 		// add read-only flag
 		dbPath += "mode=ro"
 	} else {
-		dbPath += "mode=rwc"
+		// dbPath += "mode=rwc"
 	}
 	logger.Info("DB path: ", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)
@@ -415,13 +415,13 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 	if dbPath == "" {
 		dbPath = "file:" + path + "/blocks.db?cache=shared&_journal_mode=WAL&"
 	} else {
-		dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
+		// dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
 	}
 	if ro {
 		// add read-only flag
 		dbPath += "mode=ro"
 	} else {
-		dbPath += "mode=rwc"
+		// dbPath += "mode=rwc"
 	}
 
 	logger.Info("DBH path: ", dbPath)
