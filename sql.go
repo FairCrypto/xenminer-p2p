@@ -69,7 +69,7 @@ const (
 		VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 	getLatestHashIdSql string = `
-		SELECT MAX(id) as latest_hash_id FROM blocks;
+		SELECT MAX(block_id) as latest_hash_id FROM blocks;
 	`
 
 	getLatestXuniIdSql string = `
