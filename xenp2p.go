@@ -392,9 +392,11 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 		log.Fatal("Error when opening DB file: ", err)
 	}
 
-	_, err = db.Exec(createBlockchainTableSql)
-	if err != nil {
-		log.Fatal("Error when checking/creating table: ", err)
+	if !ro {
+		_, err = db.Exec(createBlockchainTableSql)
+		if err != nil {
+			log.Fatal("Error when checking/creating table: ", err)
+		}
 	}
 
 	maxHeight := getCurrentHeight(db)
@@ -428,15 +430,18 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 		log.Fatal("Error when opening hashes DB file: ", err)
 	}
 
-	_, err = db.Exec(createHashesTableSql)
-	if err != nil {
-		log.Fatal("Error creating hashes table: ", err)
+	if !ro {
+		_, err = db.Exec(createHashesTableSql)
+		if err != nil {
+			log.Fatal("Error creating hashes table: ", err)
+		}
+
+		_, err = db.Exec(createXunisTableSql)
+		if err != nil {
+			log.Fatal("Error creating xunis table: ", err)
+		}
 	}
 
-	_, err = db.Exec(createXunisTableSql)
-	if err != nil {
-		log.Fatal("Error creating xunis table: ", err)
-	}
 	lastHashId := getLatestHashId(db)
 	lastXuniId := getLatestXuniId(db)
 	logger.Info("LAST ", lastHashId, lastXuniId)
