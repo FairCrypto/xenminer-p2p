@@ -95,3 +95,100 @@ func getCurrentHeight(db *sql.DB) uint {
 		return 0
 	}
 }
+
+func getLatestHashId(db *sql.DB) uint {
+	rows, err := db.Query(getLatestHashIdSql)
+	if err != nil {
+		log.Println("Error when querying HDB: ", err)
+		return 0
+	}
+	var height Height
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	rows.Next()
+	err = rows.Scan(&height.Max)
+	if err != nil {
+		log.Println("Error retrieving data from HDB: ", err)
+	}
+	if height.Max.Valid {
+		return uint(height.Max.Int32)
+	} else {
+		return 0
+	}
+}
+
+func getLatestXuniId(db *sql.DB) uint {
+	rows, err := db.Query(getLatestXuniIdSql)
+	if err != nil {
+		log.Println("Error when querying HDB: ", err)
+		return 0
+	}
+	var height Height
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	rows.Next()
+	err = rows.Scan(&height.Max)
+	if err != nil {
+		log.Println("Error retrieving data from HDB: ", err)
+	}
+	if height.Max.Valid {
+		return uint(height.Max.Int32)
+	} else {
+		return 0
+	}
+}
+
+func insertHashRecord(db *sql.DB, hashRecord HashRecord) error {
+	_, err := db.Exec(
+		insertHashSql,
+		hashRecord.Id,
+		hashRecord.CreatedAt,
+		hashRecord.Key,
+		hashRecord.HashToVerify,
+		hashRecord.Account,
+	)
+	return err
+}
+
+func insertXuniRecord(db *sql.DB, hashRecord HashRecord) error {
+	_, err := db.Exec(
+		insertXuniSql,
+		hashRecord.Id,
+		hashRecord.CreatedAt,
+		hashRecord.Key,
+		hashRecord.HashToVerify,
+		hashRecord.Account,
+	)
+	return err
+}
+
+func getAllBlocks(db *sql.DB) (c chan Block) {
+	c = make(chan Block)
+	rows, err := db.Query(getAllRowsBlockchainSql)
+	if err != nil {
+		log.Fatal("Error when querying DB: ", err)
+	}
+	go func() {
+		defer func(rows *sql.Rows) {
+			close(c)
+			err := rows.Close()
+			if err != nil {
+				log.Println("Error when closing rows: ", err)
+			}
+		}(rows)
+		var block Block
+		for rows.Next() {
+			_ = rows.Scan(&block.Id, &block.Timestamp, &block.PrevHash, &block.MerkleRoot, &block.RecordsJson, &block.BlockHash)
+			c <- block
+		}
+	}()
+	return c
+}
