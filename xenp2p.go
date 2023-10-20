@@ -382,7 +382,7 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	}
 	if ro {
 		// add read-only flag
-		dbPath += "mode=ro"
+		// dbPath += "mode=ro"
 	} else {
 		// dbPath += "mode=rwc"
 	}
@@ -419,7 +419,7 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 	}
 	if ro {
 		// add read-only flag
-		dbPath += "mode=ro"
+		// dbPath += "mode=ro"
 	} else {
 		// dbPath += "mode=rwc"
 	}
