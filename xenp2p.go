@@ -384,7 +384,7 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	} else {
 		dbPath += "mode=rwc"
 	}
-
+	logger.Info("DB path: ", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Error when opening DB file: ", err)
@@ -418,6 +418,7 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 		dbPath += "mode=rwc"
 	}
 
+	logger.Info("DBH path: ", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Error when opening hashes DB file: ", err)
