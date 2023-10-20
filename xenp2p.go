@@ -667,13 +667,15 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 			//	logger.Info("New Xuni Id ", *lastXuniId)
 			//}
 
-			bytes, err := json.Marshal(hashOrXuni)
-			if err != nil {
-				log.Fatal("Error converting hash/xuni", err)
-			}
-			err = topics.newHash.Publish(ctx, bytes)
-			if err != nil {
-				log.Fatal("Error publishing message", err)
+			if hashOrXuni != nil {
+				bytes, err := json.Marshal(hashOrXuni)
+				if err != nil {
+					log.Fatal("Error converting hash/xuni", err)
+				}
+				err = topics.newHash.Publish(ctx, bytes)
+				if err != nil {
+					log.Fatal("Error publishing message", err)
+				}
 			}
 		case <-quit:
 			t.Stop()
