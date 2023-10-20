@@ -377,6 +377,8 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	dbPath = os.Getenv("DB_LOCATION")
 	if dbPath == "" {
 		dbPath = "file:" + path + "/blockchain.db?cache=shared&_journal_mode=WAL&"
+	} else {
+		dbPath = "file:" + path + "&"
 	}
 	if ro {
 		// add read-only flag
@@ -410,6 +412,8 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 	dbPath = os.Getenv("DBH_LOCATION")
 	if dbPath == "" {
 		dbPath = "file:" + path + "/blocks.db?cache=shared&_journal_mode=WAL&"
+	} else {
+		dbPath = "file:" + path + "&"
 	}
 	if ro {
 		// add read-only flag
