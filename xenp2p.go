@@ -365,6 +365,24 @@ func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topic
 		logger.Error("Error subscribing to topic", err)
 	}
 
+	topics.newHash, err = ps.Join("new_hash")
+	if err != nil {
+		logger.Error("Error joining topic", err)
+	}
+	subs.newHash, err = topics.newHash.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic", err)
+	}
+
+	topics.newXuni, err = ps.Join("new_xuni")
+	if err != nil {
+		logger.Error("Error joining topic", err)
+	}
+	subs.newXuni, err = topics.newXuni.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic", err)
+	}
+
 	if err != nil {
 		panic(err)
 	}
