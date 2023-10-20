@@ -653,7 +653,7 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 		select {
 		case <-t.C:
 			lastHash := getLatestHash(dbh)
-			lastXuni := getLatestXuni(dbh)
+			// lastXuni := getLatestXuni(dbh)
 			// logger.Info("Last ", lastHash.Id, lastXuni.Id)
 			var hashOrXuni *HashRecord
 			if lastHash.Id > *lastHashId {
@@ -661,11 +661,11 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 				*lastHashId = lastHash.Id
 				logger.Info("New Hash Id ", *lastHashId)
 			}
-			if lastXuni.Id > *lastXuniId {
-				hashOrXuni = lastXuni
-				*lastXuniId = lastXuni.Id
-				logger.Info("New Xuni Id ", *lastXuniId)
-			}
+			// if lastXuni.Id > *lastXuniId {
+			//	hashOrXuni = lastXuni
+			//	*lastXuniId = lastXuni.Id
+			//	logger.Info("New Xuni Id ", *lastXuniId)
+			//}
 
 			bytes, err := json.Marshal(hashOrXuni)
 			if err != nil {
