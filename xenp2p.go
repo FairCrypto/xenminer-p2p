@@ -645,7 +645,7 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 	dbh := ctx.Value("dbh").(*sql.DB)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	t := time.NewTicker(500 * time.Millisecond)
+	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()
 	quit := make(chan struct{})
 
