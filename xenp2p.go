@@ -659,12 +659,12 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 			if lastHash.Id > *lastHashId {
 				hashOrXuni = lastHash
 				*lastHashId = lastHash.Id
-				logger.Info("New Hash Id ", lastHashId)
+				logger.Info("New Hash Id ", *lastHashId)
 			}
 			if lastXuni.Id > *lastXuniId {
 				hashOrXuni = lastXuni
 				*lastXuniId = lastXuni.Id
-				logger.Info("New Xuni Id ", lastHashId)
+				logger.Info("New Xuni Id ", *lastXuniId)
 			}
 
 			bytes, err := json.Marshal(hashOrXuni)
