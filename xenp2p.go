@@ -267,6 +267,30 @@ func processData(ctx context.Context) {
 	}
 }
 
+func processNewHash(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	// db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	for {
+		msg, err := subs.newHash.Next(ctx)
+		if msg.ReceivedFrom.String() == peerId {
+			continue
+		}
+		if err != nil {
+			logger.Warn("Error getting data message: ", err)
+		}
+		var hash HashRecord
+		err = json.Unmarshal(msg.Data, &hash)
+		if err != nil {
+			logger.Warn("Error converting data message: ", err)
+		}
+		logger.Info("Discovered New Hash Id ", hash.Id)
+		time.Sleep(yieldTime)
+	}
+}
+
 func loadPeerParams(path string, logger log0.EventLogger) (multiaddr.Multiaddr, crypto.PrivKey, string) {
 	content, err := os.ReadFile(path + "/peer.json")
 	if err != nil {
@@ -668,7 +692,7 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 			//}
 
 			if hashOrXuni != nil {
-				bytes, err := json.Marshal(hashOrXuni)
+				bytes, err := json.Marshal(*hashOrXuni)
 				if err != nil {
 					log.Fatal("Error converting hash/xuni", err)
 				}
@@ -883,6 +907,9 @@ func main() {
 
 	wg.Add(1)
 	go processGet(ctx)
+
+	wg.Add(1)
+	go processNewHash(ctx)
 
 	wg.Add(1)
 	go broadcastBlockHeight(ctx)
