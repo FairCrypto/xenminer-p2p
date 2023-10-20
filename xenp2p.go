@@ -376,15 +376,15 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	}
 	dbPath = os.Getenv("DB_LOCATION")
 	if dbPath == "" {
-		dbPath = "file:" + path + "/blockchain.db?cache=shared&_journal_mode=WAL&"
+		dbPath = "file:" + path + "/blockchain.db?cache=shared&"
 	} else {
-		// dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
+		dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
 	}
 	if ro {
 		// add read-only flag
-		// dbPath += "mode=ro"
+		dbPath += "mode=ro"
 	} else {
-		// dbPath += "mode=rwc"
+		dbPath += "_journal_mode=WAL&mode=rwc"
 	}
 	logger.Info("DB path: ", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)
@@ -413,15 +413,15 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint
 	}
 	dbPath = os.Getenv("DBH_LOCATION")
 	if dbPath == "" {
-		dbPath = "file:" + path + "/blocks.db?cache=shared&_journal_mode=WAL&"
+		dbPath = "file:" + path + "/blocks.db?cache=shared&"
 	} else {
-		// dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
+		dbPath = "file:" + dbPath + "?cache=shared&"
 	}
 	if ro {
 		// add read-only flag
-		// dbPath += "mode=ro"
+		dbPath += "mode=ro"
 	} else {
-		// dbPath += "mode=rwc"
+		dbPath += "_journal_mode=WAL&mode=rwc"
 	}
 
 	logger.Info("DBH path: ", dbPath)
