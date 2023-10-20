@@ -768,7 +768,7 @@ func main() {
 	hdb, lastHashId, lastXuniId := setupHashesDB(*configPath, *readOnlyDB, logger)
 	logger.Infof("Latest: hash %d, xuni %d", lastHashId, lastXuniId)
 
-	ctx = context.WithValue(ctx, "hdb", db)
+	ctx = context.WithValue(ctx, "dbh", hdb)
 	defer func(hdb *sql.DB) {
 		_ = hdb.Close()
 	}(hdb)
