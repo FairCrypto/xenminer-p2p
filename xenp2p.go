@@ -378,7 +378,7 @@ func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
 	if dbPath == "" {
 		dbPath = "file:" + path + "/blockchain.db?cache=shared&"
 	} else {
-		dbPath = "file:" + dbPath + "?cache=shared&_journal_mode=WAL&"
+		dbPath = "file:" + dbPath + "?cache=shared&"
 	}
 	if ro {
 		// add read-only flag
