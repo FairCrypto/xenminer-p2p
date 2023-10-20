@@ -645,7 +645,7 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 	dbh := ctx.Value("dbh").(*sql.DB)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	t := time.NewTicker(1_000 * time.Millisecond)
+	t := time.NewTicker(500 * time.Millisecond)
 	defer t.Stop()
 	quit := make(chan struct{})
 
@@ -654,7 +654,7 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 		case <-t.C:
 			lastHash := getLatestHash(dbh)
 			lastXuni := getLatestXuni(dbh)
-			logger.Info("Last ", lastHash.Id, lastXuni.Id)
+			// logger.Info("Last ", lastHash.Id, lastXuni.Id)
 			var hashOrXuni *HashRecord
 			if lastHash.Id > *lastHashId {
 				hashOrXuni = lastHash

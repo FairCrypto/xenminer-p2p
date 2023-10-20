@@ -77,10 +77,10 @@ const (
 	`
 
 	getLatestHashSql string = `
-		SELECT * FROM blocks ORDER BY block_id ASC LIMIT 1;
+		SELECT * FROM blocks ORDER BY block_id DESC LIMIT 1;
 	`
 
 	getLatestXuniSql string = `
-		SELECT * FROM xuni ORDER BY id ASC LIMIT 1;
+		SELECT * FROM xuni ORDER BY id DESC LIMIT 1;
 	`
 )
