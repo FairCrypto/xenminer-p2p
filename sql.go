@@ -41,7 +41,7 @@ const (
 
 	createHashesTableSql = `
 		CREATE TABLE IF NOT EXISTS blocks (
-    		id INTEGER PRIMARY KEY,
+    		block_id INTEGER PRIMARY KEY,
     		hash_to_verify TEXT,
     		key TEXT UNIQUE,
     		account TEXT,
@@ -60,7 +60,7 @@ const (
 	`
 
 	insertHashSql = `
-		INSERT INTO blocks (id, created_at, key, hash_to_verify, account)
+		INSERT INTO blocks (block_id, created_at, key, hash_to_verify, account)
 		VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 
