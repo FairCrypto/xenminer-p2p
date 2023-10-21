@@ -4,24 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
-	"fmt"
 	log0 "github.com/ipfs/go-log/v2"
-	"github.com/joho/godotenv"
-	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
 	"go.uber.org/zap/zapcore"
 	"log"
@@ -86,6 +78,7 @@ type Height struct {
 type Blocks []Block
 
 type Topics struct {
+	shift       *pubsub.Topic
 	newHash     *pubsub.Topic
 	newXuni     *pubsub.Topic
 	blockHeight *pubsub.Topic
@@ -94,11 +87,19 @@ type Topics struct {
 }
 
 type Subs struct {
+	shift       *pubsub.Subscription
 	newHash     *pubsub.Subscription
 	newXuni     *pubsub.Subscription
 	blockHeight *pubsub.Subscription
 	data        *pubsub.Subscription
 	get         *pubsub.Subscription
+}
+
+type NetworkState struct {
+	ShiftNumber uint64 `json:"shiftNumber"`
+	BlockHeight uint64 `json:"blockHeight"`
+	LastHashId  uint64 `json:"lastHashId"`
+	LastXuniId  uint64 `json:"lastXuniId"`
 }
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
@@ -118,7 +119,7 @@ func processBlockHeight(ctx context.Context) {
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		} else {
-			logger.Info("received msg from ", msg.ReceivedFrom.String())
+			// logger.Info("received msg from ", msg.ReceivedFrom.String())
 		}
 		if err != nil {
 			logger.Warn("Error getting message: ", err)
@@ -331,260 +332,6 @@ func processNewHash(ctx context.Context) {
 	}
 }
 
-func loadPeerParams(path string, logger log0.EventLogger) (multiaddr.Multiaddr, crypto.PrivKey, string) {
-	content, err := os.ReadFile(path + "/peer.json")
-	if err != nil {
-		logger.Error("Error when opening file: ", err)
-	}
-	err = godotenv.Load(path + "/.env")
-	if err != nil {
-		logger.Error("Error loading ENV: ", err)
-	}
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "10330"
-	}
-
-	// Now let's unmarshall the data into `peerId`
-	var peerId PeerId
-	err = json.Unmarshal(content, &peerId)
-	if err != nil {
-		logger.Error("Error reading Peer config file: ", err)
-	}
-	logger.Info("PeerId: ", peerId.Id)
-
-	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", port))
-	if err != nil {
-		logger.Error("Error making address: ", err)
-	}
-
-	sk, err := base64.StdEncoding.DecodeString(peerId.PrivKey)
-	if err != nil {
-		logger.Error("Error base64-decoding pk: ", err)
-	}
-
-	privKey, err := crypto.UnmarshalPrivateKey(sk)
-	if err != nil {
-		logger.Error("Error converting pk: ", err)
-	}
-	if err != nil {
-		panic(err)
-	}
-
-	return addr, privKey, peerId.Id
-}
-
-func prepareBootstrapAddresses(path string, logger log0.EventLogger) []string {
-	err := godotenv.Load(path + "/.env")
-	if err != nil {
-		logger.Error("Error loading ENV: ", err)
-	}
-	notEmpty := func(item string, index int) bool {
-		return item != ""
-	}
-	bootstrapHosts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_HOSTS"), ","), notEmpty)
-	bootstrapPorts := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PORTS"), ","), notEmpty)
-	bootstrapPeers := lo.Filter[string](strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ","), notEmpty)
-
-	var destinations []string
-	for i, peerId := range bootstrapPeers {
-		destinations = append(
-			destinations,
-			fmt.Sprintf(
-				"/ip4/%s/tcp/%s/p2p/%s",
-				bootstrapHosts[i],
-				bootstrapPorts[i],
-				peerId,
-			))
-	}
-	return destinations
-}
-
-func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topics, subs Subs) {
-	var err error
-	topics.blockHeight, err = ps.Join("block_height")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.blockHeight, err = topics.blockHeight.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.get, err = ps.Join("get")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.get, err = topics.get.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.data, err = ps.Join("data")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.data, err = topics.data.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.newHash, err = ps.Join("new_hash")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.newHash, err = topics.newHash.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.newXuni, err = ps.Join("new_xuni")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.newXuni, err = topics.newXuni.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-	return
-}
-
-func setupDB(path string, ro bool, logger log0.EventLogger) *sql.DB {
-	err := godotenv.Load(path + "/.env")
-	var dbPath = ""
-	if err != nil {
-		err = nil
-	}
-	dbPath = os.Getenv("DB_LOCATION")
-	if dbPath == "" {
-		dbPath = "file:" + path + "/blockchain.db?cache=shared&"
-	} else {
-		dbPath = "file:" + dbPath + "?cache=shared&"
-	}
-	if ro {
-		// add read-only flag
-		dbPath += "mode=ro"
-	} else {
-		dbPath += "_journal_mode=WAL&mode=rwc"
-	}
-	logger.Info("DB path: ", dbPath)
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		log.Fatal("Error when opening DB file: ", err)
-	}
-
-	if !ro {
-		_, err = db.Exec(createBlockchainTableSql)
-		if err != nil {
-			log.Fatal("Error when checking/creating table: ", err)
-		}
-	}
-
-	maxHeight := getCurrentHeight(db)
-	logger.Info("HGHT ", maxHeight)
-
-	return db
-}
-
-func setupHashesDB(path string, ro bool, logger log0.EventLogger) (*sql.DB, uint, uint) {
-	err := godotenv.Load(path + "/.env")
-	var dbPath = ""
-	if err != nil {
-		err = nil
-	}
-	dbPath = os.Getenv("DBH_LOCATION")
-	if dbPath == "" {
-		dbPath = "file:" + path + "/blocks.db?cache=shared&"
-	} else {
-		dbPath = "file:" + dbPath + "?cache=shared&"
-	}
-	if ro {
-		// add read-only flag
-		dbPath += "mode=ro"
-	} else {
-		dbPath += "_journal_mode=WAL&mode=rwc"
-	}
-
-	logger.Info("DBH path: ", dbPath)
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		log.Fatal("Error when opening hashes DB file: ", err)
-	}
-
-	if !ro {
-		_, err = db.Exec(createHashesTableSql)
-		if err != nil {
-			log.Fatal("Error creating hashes table: ", err)
-		}
-
-		_, err = db.Exec(createXunisTableSql)
-		if err != nil {
-			log.Fatal("Error creating xunis table: ", err)
-		}
-	}
-
-	lastHashId := getLatestHashId(db)
-	lastXuniId := getLatestXuniId(db)
-	logger.Info("LAST ", lastHashId, lastXuniId)
-
-	return db, lastHashId, lastXuniId
-}
-
-func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
-	h, err := libp2p.New(
-		libp2p.ListenAddrs(addr),
-		libp2p.Identity(privKey),
-		// libp2p.Transport(tcp.NewTCPTransport),
-		// libp2p.Security(noise.ID, noise.New), // redundant
-	)
-	if err != nil {
-		log.Fatal("Error starting Peer: ", err)
-	}
-	return h
-}
-
-var toAddrInfo = func(destination string, _ int) peer.AddrInfo {
-	address, err := multiaddr.NewMultiaddr(destination)
-	if err != nil {
-		log.Println(err)
-	}
-	info, err := peer.AddrInfoFromP2pAddr(address)
-	if err != nil {
-		log.Println(err)
-	}
-	return *info
-}
-
-func connectToPeer(ctx context.Context, destination string) {
-	h := ctx.Value("host").(host.Host)
-	logger := ctx.Value("logger").(log0.EventLogger)
-
-	// Turn the destination into a multiaddr.
-	info := toAddrInfo(destination, 0)
-	// Add the destination's peer multiaddress in the peerstore.
-	// This will be used during connection and stream creation by Libp2p.
-	h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
-	err := h.Connect(ctx, info)
-	if err != nil {
-		logger.Warn("Error connecting: ", err)
-	}
-}
-
-func setupConnections(ctx context.Context, destinations []string) {
-	logger := ctx.Value("logger").(log0.EventLogger)
-
-	logger.Info("destinations", destinations)
-
-	for _, dest := range destinations {
-		connectToPeer(ctx, dest)
-		logger.Info("Connect to: ", dest)
-	}
-}
-
 func hasPeer(peers peer.IDSlice, p string) bool {
 	for i := 0; i < peers.Len(); i++ {
 		if strings.HasSuffix(p, peers[i].String()) {
@@ -704,10 +451,11 @@ func broadcastBlockHeight(ctx context.Context) {
 	}
 }
 
-func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) {
+func broadcastLastHash(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	dbh := ctx.Value("dbh").(*sql.DB)
 	logger := ctx.Value("logger").(log0.EventLogger)
+	state := ctx.Value("state").(*NetworkState)
 
 	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()
@@ -720,10 +468,10 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 			// lastXuni := getLatestXuni(dbh)
 			// logger.Info("Last ", lastHash.Id, lastXuni.Id)
 			var hashOrXuni *HashRecord
-			if lastHash.Id > *lastHashId {
+			if uint64(lastHash.Id) > state.LastHashId {
 				hashOrXuni = lastHash
-				*lastHashId = lastHash.Id
-				logger.Info("New Hash Id ", *lastHashId)
+				state.LastHashId = uint64(lastHash.Id)
+				logger.Info("New Hash Id ", state.LastHashId)
 			}
 			// if lastXuni.Id > *lastXuniId {
 			//	hashOrXuni = lastXuni
@@ -748,62 +496,60 @@ func broadcastLastHash(ctx context.Context, lastHashId *uint, lastXuniId *uint) 
 	}
 }
 
-func setupDiscovery(ctx context.Context, destinations []string) *drouting.RoutingDiscovery {
-	h := ctx.Value("host").(host.Host)
-	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
+func runShifts(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
+	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
+	state := ctx.Value("state").(*NetworkState)
 
-	// Let's connect to the bootstrap nodes first. They will tell us about the
-	// other nodes in the network.
+	// TODO: refactor to config !!!
+	const shiftDuration = 60 * time.Second
 
-	var wg sync.WaitGroup
-	for i, peerAddr := range destinations {
-		peerInfo := toAddrInfo(peerAddr, i)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			h.Peerstore().AddAddrs(peerInfo.ID, peerInfo.Addrs, peerstore.PermanentAddrTTL)
-			if err := h.Connect(ctx, peerInfo); err != nil {
-				logger.Warn(err)
-			} else {
-				logger.Info("Connection established with bootstrap node:", peerInfo)
+	c := make(chan uint64, 1)
+
+	go func() {
+		for {
+			msg, err := subs.shift.Next(ctx)
+			if msg.ReceivedFrom.String() == peerId {
+				continue
 			}
-		}()
-	}
-	wg.Wait()
-
-	// We use a rendezvous point "meet me here" to announce our location.
-	// This is like telling your friends to meet you at the Eiffel Tower.
-	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
-	dutil.Advertise(ctx, routingDiscovery, rendezvousString)
-	logger.Info("Started announcing")
-
-	logger.Info("Searching for other peers")
-	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
-	if err != nil {
-		logger.Warn(err)
-	}
-
-	for p := range peerChan {
-		logger.Info("Peer candidate: ", p)
-		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
-			continue
+			var currentShift uint64
+			err = json.Unmarshal(msg.Data, &currentShift)
+			if err != nil {
+				logger.Warn("Error decoding message: ", err)
+			}
+			c <- currentShift
+			runtime.Gosched()
 		}
-		logger.Info("Found peer:", p)
-		err = h.Connect(ctx, p)
-		if err != nil {
-			logger.Warn("Error connecting to peer: ", err)
+	}()
+
+	for {
+		select {
+		case shift := <-c:
+			logger.Infof("received shift %d, current %d", shift, state.ShiftNumber)
+			if shift > state.ShiftNumber {
+				state.ShiftNumber = shift
+			}
+
+		case <-time.After(shiftDuration):
+			logger.Info("timeout waiting for shift")
+			state.ShiftNumber++
+			data, err := json.Marshal(state.ShiftNumber)
+			if err != nil {
+				logger.Warn("Error encoding message: ", err)
+			}
+			err = topics.shift.Publish(ctx, data)
+			if err != nil {
+				logger.Warn("Error publishing message: ", err)
+			}
+			logger.Infof("published shift %d", state.ShiftNumber)
 		}
-		logger.Info("Connected to:", p)
 	}
-	return routingDiscovery
 
 }
 
 func main() {
-
-	var lastHashId uint = 0
-	var lastXuniId uint = 0
 
 	logger := log0.Logger("xen-blocks")
 
@@ -842,9 +588,17 @@ func main() {
 	logger.Info("Loading config from", *configPath)
 	logger.Info("Starting Node")
 
+	state := &NetworkState{
+		ShiftNumber: 0,
+		BlockHeight: 0,
+		LastHashId:  0,
+		LastXuniId:  0,
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = context.WithValue(ctx, "logger", logger)
+	ctx = context.WithValue(ctx, "state", state)
 
 	// setup DB and check / init table(s)
 	db := setupDB(*configPath, *readOnlyDB, logger)
@@ -854,8 +608,8 @@ func main() {
 	}(db)
 
 	// setup hash/xuni DB and check / init table(s)
-	hdb, lastHashId, lastXuniId := setupHashesDB(*configPath, *readOnlyDB, logger)
-	logger.Infof("Latest: hash %d, xuni %d", lastHashId, lastXuniId)
+	hdb := setupHashesDB(*configPath, *readOnlyDB, logger, state)
+	logger.Infof("Latest state: %d", state)
 
 	ctx = context.WithValue(ctx, "dbh", hdb)
 	defer func(hdb *sql.DB) {
@@ -889,33 +643,34 @@ func main() {
 	var disc *drouting.RoutingDiscovery
 	if *client {
 		setupConnections(ctx, destinations)
-	} else {
-		var dhtOptions []dht.Option
-		if len(destinations) > 0 {
-			dhtOptions = append(dhtOptions, dht.BootstrapPeers(peers...))
-		}
-		if *client {
-			// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
-			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
-		}
-
-		kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
-		if err != nil {
-			panic(err)
-		}
-		ctx = context.WithValue(ctx, "dht", kademliaDHT)
-		defer func(kademliaDHT *dht.IpfsDHT) {
-			_ = kademliaDHT.Close()
-		}(kademliaDHT)
-
-		disc = setupDiscovery(ctx, destinations)
-		// Bootstrap the DHT. In the default configuration, this spawns a Background
-		// thread that will refresh the peer table every five minutes.
-		logger.Info("Bootstrapping the DHT")
-		if err = kademliaDHT.Bootstrap(ctx); err != nil {
-			panic(err)
-		}
 	}
+	//} else {
+	var dhtOptions []dht.Option
+	if len(destinations) > 0 {
+		dhtOptions = append(dhtOptions, dht.BootstrapPeers(peers...))
+	}
+	if *client {
+		// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
+		dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
+	}
+
+	kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
+	if err != nil {
+		panic(err)
+	}
+	ctx = context.WithValue(ctx, "dht", kademliaDHT)
+	defer func(kademliaDHT *dht.IpfsDHT) {
+		_ = kademliaDHT.Close()
+	}(kademliaDHT)
+
+	disc = setupDiscovery(ctx, destinations)
+	// Bootstrap the DHT. In the default configuration, this spawns a Background
+	// thread that will refresh the peer table every five minutes.
+	logger.Info("Bootstrapping the DHT")
+	if err = kademliaDHT.Bootstrap(ctx); err != nil {
+		panic(err)
+	}
+	//}
 
 	// setup pubsub protocol (either floodsub or gossip)
 	var pubsubOptions []pubsub.Option
@@ -959,7 +714,9 @@ func main() {
 
 	if peerId == masterPeerId {
 		wg.Add(1)
-		go broadcastLastHash(ctx, &lastHashId, &lastXuniId)
+		go broadcastLastHash(ctx)
+	} else {
+		go runShifts(ctx)
 	}
 
 	if *client {
