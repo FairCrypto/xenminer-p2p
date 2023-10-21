@@ -27,6 +27,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,7 @@ type Subs struct {
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 const yieldTime = 100 * time.Millisecond
+const shortYieldTime = 10 * time.Millisecond
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
@@ -115,6 +117,8 @@ func processBlockHeight(ctx context.Context) {
 		msg, err := subs.blockHeight.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
 			continue
+		} else {
+			logger.Info("received msg from ", msg.ReceivedFrom.String())
 		}
 		if err != nil {
 			logger.Warn("Error getting message: ", err)
@@ -145,7 +149,7 @@ func processBlockHeight(ctx context.Context) {
 		if blockchainHeight == localHeight {
 			logger.Info("IN SYNC", localHeight, "=", blockchainHeight)
 		}
-		time.Sleep(yieldTime)
+		runtime.Gosched()
 	}
 }
 
@@ -189,7 +193,7 @@ func processGet(ctx context.Context) {
 				err = nil
 			}
 		}
-		time.Sleep(yieldTime)
+		runtime.Gosched()
 	}
 }
 
@@ -263,8 +267,21 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
-		time.Sleep(yieldTime)
+		runtime.Gosched()
 	}
+}
+
+func enqueue[T any](queue []T, element T) []T {
+	queue = append(queue, element) // Simply append to enqueue.
+	return queue
+}
+
+func dequeue[T any](queue []T) (T, []T) {
+	element := queue[0] // The first element is the one to be dequeued.
+	if len(queue) == 1 {
+		return element, make([]T, 0)
+	}
+	return element, queue[1:] // Slice off the element once it is dequeued.
 }
 
 func processNewHash(ctx context.Context) {
@@ -273,6 +290,14 @@ func processNewHash(ctx context.Context) {
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
+	const interval = 60
+	// const longInterval = 600
+
+	type HashMap map[uint]uint
+	hashMap := HashMap{}
+	// queue := make([]HashMap, 0)
+
+	var lastTs uint = 0
 	for {
 		msg, err := subs.newHash.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
@@ -286,8 +311,22 @@ func processNewHash(ctx context.Context) {
 		if err != nil {
 			logger.Warn("Error converting data message: ", err)
 		}
-		logger.Info("Discovered New Hash Id ", hash.Id)
-		time.Sleep(yieldTime)
+
+		// logger.Info("Discovered New Hash Id ", hash.Id)
+		countPre := len(hashMap)
+		hashMap[hash.Id] = uint(time.Now().Unix())
+		if len(hashMap) > countPre {
+			if lastTs == 0 {
+				lastTs = uint(time.Now().Unix())
+			}
+			if len(hashMap)%interval == 0 {
+				difficulty := interval / float32(uint(time.Now().Unix())-lastTs)
+				logger.Info("Difficulty ", difficulty)
+				lastTs = 0
+				hashMap = map[uint]uint{}
+			}
+		}
+		runtime.Gosched()
 	}
 }
 
@@ -726,7 +765,7 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 			if err := h.Connect(ctx, peerInfo); err != nil {
 				logger.Warn(err)
 			} else {
-				logger.Warn("Connection established with bootstrap node:", peerInfo)
+				logger.Info("Connection established with bootstrap node:", peerInfo)
 			}
 		}()
 	}
@@ -779,8 +818,12 @@ func main() {
 	if *logLevel != "" {
 		level, _ := zapcore.ParseLevel(*logLevel)
 		log0.SetAllLoggers(log0.LogLevel(level))
+		_ = log0.SetLogLevel("pubsub", "error")
+		_ = log0.SetLogLevel("dht", "error")
 	} else {
 		log0.SetAllLoggers(log0.LevelWarn)
+		_ = log0.SetLogLevel("pubsub", "error")
+		_ = log0.SetLogLevel("dht", "error")
 	}
 
 	if *init {
