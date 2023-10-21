@@ -267,7 +267,8 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
-		runtime.Gosched()
+		time.Sleep(yieldTime)
+		// runtime.Gosched()
 	}
 }
 
