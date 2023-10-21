@@ -909,14 +909,13 @@ func main() {
 		}(kademliaDHT)
 
 		disc = setupDiscovery(ctx, destinations)
+		// Bootstrap the DHT. In the default configuration, this spawns a Background
+		// thread that will refresh the peer table every five minutes.
+		logger.Info("Bootstrapping the DHT")
+		if err = kademliaDHT.Bootstrap(ctx); err != nil {
+			panic(err)
+		}
 	}
-
-	// Bootstrap the DHT. In the default configuration, this spawns a Background
-	// thread that will refresh the peer table every five minutes.
-	// logger.Info("Bootstrapping the DHT")
-	// if err = kademliaDHT.Bootstrap(ctx); err != nil {
-	// 	panic(err)
-	// }
 
 	// setup pubsub protocol (either floodsub or gossip)
 	var pubsubOptions []pubsub.Option
