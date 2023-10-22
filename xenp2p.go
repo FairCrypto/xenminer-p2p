@@ -541,7 +541,7 @@ func processNewHash(ctx context.Context) {
 				state.Difficulty,
 			)
 			if gotState.ShiftNumber > state.ShiftNumber {
-				if state.ShiftNumber == 0 {
+				if state.ShiftNumber == 0 || gotState.ShiftNumber-state.ShiftNumber > 5 {
 					lastTs = 0
 					hashMap = map[uint]uint{}
 					state.ShiftNumber = gotState.ShiftNumber
