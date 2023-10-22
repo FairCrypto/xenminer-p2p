@@ -533,8 +533,18 @@ func processNewHash(ctx context.Context) {
 			}
 
 		case gotState := <-cState:
-			logger.Infof("received shift %d, current %d", gotState.ShiftNumber, state.ShiftNumber)
+			logger.Infof(
+				"received shift %d (%d), diff %f (%f)",
+				gotState.ShiftNumber,
+				state.ShiftNumber,
+				gotState.Difficulty,
+				state.Difficulty,
+			)
 			if gotState.ShiftNumber > state.ShiftNumber {
+				if state.ShiftNumber == 0 {
+					lastTs = 0
+					hashMap = map[uint]uint{}
+				}
 				state.ShiftNumber = gotState.ShiftNumber
 			}
 		}
@@ -572,7 +582,11 @@ func runShifts(ctx context.Context) {
 	for {
 		select {
 		case shift := <-c:
-			logger.Infof("received shift %d, current %d", shift, state.ShiftNumber)
+			logger.Infof(
+				"received shift %d (%d)",
+				shift,
+				state.ShiftNumber,
+			)
 			if shift > state.ShiftNumber {
 				state.ShiftNumber = shift
 			}
