@@ -96,16 +96,25 @@ type Subs struct {
 }
 
 type NetworkState struct {
-	ShiftNumber uint64 `json:"shiftNumber"`
-	BlockHeight uint64 `json:"blockHeight"`
-	LastHashId  uint64 `json:"lastHashId"`
-	LastXuniId  uint64 `json:"lastXuniId"`
+	ShiftNumber uint64  `json:"shiftNumber"`
+	Difficulty  float32 `json:"difficulty"`
+	BlockHeight uint64  `json:"blockHeight"`
+	LastHashId  uint64  `json:"lastHashId"`
+	LastXuniId  uint64  `json:"lastXuniId"`
 }
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 const yieldTime = 100 * time.Millisecond
-const shortYieldTime = 10 * time.Millisecond
+
+// const shortYieldTime = 10 * time.Millisecond
+
+func max(a, b uint) uint {
+	if a <= b {
+		return a
+	}
+	return b
+}
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
@@ -113,6 +122,7 @@ func processBlockHeight(ctx context.Context) {
 	db := ctx.Value("db").(*sql.DB)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
+	state := ctx.Value("state").(*NetworkState)
 
 	for {
 		msg, err := subs.blockHeight.Next(ctx)
@@ -150,6 +160,7 @@ func processBlockHeight(ctx context.Context) {
 		if blockchainHeight == localHeight {
 			logger.Info("IN SYNC", localHeight, "=", blockchainHeight)
 		}
+		state.BlockHeight = uint64(max(blockchainHeight, localHeight))
 		runtime.Gosched()
 	}
 }
@@ -273,65 +284,6 @@ func processData(ctx context.Context) {
 	}
 }
 
-func enqueue[T any](queue []T, element T) []T {
-	queue = append(queue, element) // Simply append to enqueue.
-	return queue
-}
-
-func dequeue[T any](queue []T) (T, []T) {
-	element := queue[0] // The first element is the one to be dequeued.
-	if len(queue) == 1 {
-		return element, make([]T, 0)
-	}
-	return element, queue[1:] // Slice off the element once it is dequeued.
-}
-
-func processNewHash(ctx context.Context) {
-	subs := ctx.Value("subs").(Subs)
-	// db := ctx.Value("db").(*sql.DB)
-	peerId := ctx.Value("peerId").(string)
-	logger := ctx.Value("logger").(log0.EventLogger)
-
-	const interval = 60
-	// const longInterval = 600
-
-	type HashMap map[uint]uint
-	hashMap := HashMap{}
-	// queue := make([]HashMap, 0)
-
-	var lastTs uint = 0
-	for {
-		msg, err := subs.newHash.Next(ctx)
-		if msg.ReceivedFrom.String() == peerId {
-			continue
-		}
-		if err != nil {
-			logger.Warn("Error getting data message: ", err)
-		}
-		var hash HashRecord
-		err = json.Unmarshal(msg.Data, &hash)
-		if err != nil {
-			logger.Warn("Error converting data message: ", err)
-		}
-
-		// logger.Info("Discovered New Hash Id ", hash.Id)
-		countPre := len(hashMap)
-		hashMap[hash.Id] = uint(time.Now().Unix())
-		if len(hashMap) > countPre {
-			if lastTs == 0 {
-				lastTs = uint(time.Now().Unix())
-			}
-			if len(hashMap)%interval == 0 {
-				difficulty := interval / float32(uint(time.Now().Unix())-lastTs)
-				logger.Info("Difficulty ", difficulty)
-				lastTs = 0
-				hashMap = map[uint]uint{}
-			}
-		}
-		runtime.Gosched()
-	}
-}
-
 func hasPeer(peers peer.IDSlice, p string) bool {
 	for i := 0; i < peers.Len(); i++ {
 		if strings.HasSuffix(p, peers[i].String()) {
@@ -451,6 +403,9 @@ func broadcastBlockHeight(ctx context.Context) {
 	}
 }
 
+/*
+NB: THis is running only on Supernode !!!
+*/
 func broadcastLastHash(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	dbh := ctx.Value("dbh").(*sql.DB)
@@ -492,6 +447,96 @@ func broadcastLastHash(ctx context.Context) {
 		case <-quit:
 			t.Stop()
 			return
+		}
+	}
+}
+
+func processNewHash(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
+	// db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+	state := ctx.Value("state").(*NetworkState)
+
+	const interval = 60
+	// const longInterval = 600
+
+	type HashMap map[uint]uint
+	hashMap := HashMap{}
+	// queue := make([]HashMap, 0)
+
+	cHash := make(chan HashRecord, 1)
+	cState := make(chan NetworkState, 1)
+
+	go func() {
+		for {
+			msg, err := subs.newHash.Next(ctx)
+			if msg.ReceivedFrom.String() == peerId {
+				continue
+			}
+			var hash HashRecord
+			err = json.Unmarshal(msg.Data, &hash)
+			if err != nil {
+				logger.Warn("Error decoding message: ", err)
+			}
+			cHash <- hash
+			runtime.Gosched()
+		}
+	}()
+
+	go func() {
+		for {
+			msg, err := subs.shift.Next(ctx)
+			if msg.ReceivedFrom.String() == peerId {
+				continue
+			}
+			var state NetworkState
+			err = json.Unmarshal(msg.Data, &state)
+			if err != nil {
+				logger.Warn("Error decoding message: ", err)
+			}
+			cState <- state
+			runtime.Gosched()
+		}
+	}()
+
+	var lastTs uint = 0
+	for {
+		select {
+		case hash := <-cHash:
+			// logger.Info("Discovered New Hash Id ", hash.Id)
+			state.LastHashId = uint64(hash.Id)
+			countPre := len(hashMap)
+			hashMap[hash.Id] = uint(time.Now().Unix())
+			if len(hashMap) > countPre {
+				if lastTs == 0 {
+					lastTs = uint(time.Now().Unix())
+				}
+				if len(hashMap)%interval == 0 {
+					difficulty := interval / float32(uint(time.Now().Unix())-lastTs)
+					state.Difficulty = difficulty
+					state.ShiftNumber++
+					logger.Infof("Difficulty %f, shift %d ", difficulty, state.ShiftNumber)
+
+					data, err := json.Marshal(*state)
+					if err != nil {
+						logger.Warn("Error encoding data message: ", err)
+					}
+					err = topics.shift.Publish(ctx, data)
+					if err != nil {
+						logger.Warn("Error publishing data message: ", err)
+					}
+					lastTs = 0
+					hashMap = map[uint]uint{}
+				}
+			}
+
+		case gotState := <-cState:
+			logger.Infof("received shift %d, current %d", gotState.ShiftNumber, state.ShiftNumber)
+			if gotState.ShiftNumber > state.ShiftNumber {
+				state.ShiftNumber = gotState.ShiftNumber
+			}
 		}
 	}
 }
@@ -716,7 +761,8 @@ func main() {
 		wg.Add(1)
 		go broadcastLastHash(ctx)
 	} else {
-		go runShifts(ctx)
+		// wg.Add(1)
+		// go runShifts(ctx)
 	}
 
 	if *client {
