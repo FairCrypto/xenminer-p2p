@@ -544,8 +544,8 @@ func processNewHash(ctx context.Context) {
 				if state.ShiftNumber == 0 {
 					lastTs = 0
 					hashMap = map[uint]uint{}
+					state.ShiftNumber = gotState.ShiftNumber
 				}
-				state.ShiftNumber = gotState.ShiftNumber
 			}
 		}
 	}
