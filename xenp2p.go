@@ -548,7 +548,7 @@ func processNewHash(ctx context.Context) {
 				}
 			}
 			if gotState.ShiftNumber == state.ShiftNumber &&
-				math.Abs(float64(state.Difficulty-gotState.Difficulty)) < 0.001 {
+				math.Abs(float64(state.Difficulty-gotState.Difficulty)) > 0.001 {
 				state.Difficulty = (state.Difficulty + gotState.Difficulty) / 2
 				data, err := json.Marshal(*state)
 				if err != nil {
