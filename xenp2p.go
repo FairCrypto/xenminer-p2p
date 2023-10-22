@@ -547,6 +547,15 @@ func processNewHash(ctx context.Context) {
 					state.ShiftNumber = gotState.ShiftNumber
 				}
 			}
+			if gotState.ShiftNumber == state.ShiftNumber &&
+				math.Abs(float64(state.Difficulty-gotState.Difficulty)) < 0.001 {
+				state.Difficulty = (state.Difficulty + gotState.Difficulty) / 2
+				data, err := json.Marshal(*state)
+				if err != nil {
+					logger.Warn("Error encoding data message: ", err)
+				}
+				err = topics.shift.Publish(ctx, data)
+			}
 		}
 	}
 }
