@@ -29,7 +29,8 @@ const (
 
 	getAllRowsBlockchainSql string = `
 		SELECT id, timestamp, prev_hash, merkle_root, records_json, block_hash 
-		FROM blockchain;
+		FROM blockchain 
+		ORDER BY id DESC;
 	`
 
 	getMissingRowIdsBlockchainSql = `

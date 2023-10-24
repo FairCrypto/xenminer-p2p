@@ -20,6 +20,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -714,10 +715,20 @@ func requestMissingHashesAndXunis(ctx context.Context) {
 	}
 }
 
+/*
+Starts a XenBlocks P2P Node
+A Node can have one or many of the following roles:
+- supernode (temporary, reserved)
+- relay (temporary, reserved)
+- miner
+- validator
+- rpc
+*/
 func main() {
 
 	logger := log0.Logger("xen-blocks")
 
+	roleSet := flag.String("roles", "", "defines node roles (coma-separated")
 	init := flag.Bool("init", false, "init node and exit")
 	reset := flag.Bool("reset", false, "reset all node's DBs")
 	resetBlockchain := flag.Bool("reset-blockchain", false, "reset node's blockchain DB")
@@ -729,6 +740,14 @@ func main() {
 	client := flag.Bool("client", false, "start in client-only mode")
 	logLevel := flag.String("log", "warn", "set log level")
 	flag.Parse()
+
+	isSupportedRole := func(item string, index int) bool {
+		// TODO: refactor out to a global var
+		supportedRoles := []string{"supernode", "relay", "miner", "validator", "rpc", "bootstrap"}
+		return slices.Contains(supportedRoles, item)
+	}
+	roles := lo.Filter[string](strings.Split(*roleSet, ","), isSupportedRole)
+	log.Println("roles: ", roles)
 
 	if *logLevel != "" {
 		level, _ := zapcore.ParseLevel(*logLevel)
@@ -890,8 +909,8 @@ func main() {
 		wg.Add(1)
 		go broadcastLastHash(ctx)
 	} else {
-		// wg.Add(1)
-		// go requestMissingHashesAndXunis(ctx)
+		wg.Add(1)
+		go requestMissingHashesAndXunis(ctx)
 	}
 
 	if *client {
