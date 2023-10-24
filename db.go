@@ -46,7 +46,7 @@ func insertBlock(db *sql.DB, block *Block) error {
 	return err
 }
 
-func getMissingBlocks(db *sql.DB) []uint {
+func getMissingBlockIds(db *sql.DB) []uint {
 	currentHeight := getCurrentHeight(db)
 	rows, err := db.Query(getMissingRowIdsBlockchainSql)
 	if err != nil {
@@ -69,6 +69,56 @@ func getMissingBlocks(db *sql.DB) []uint {
 		}
 	}
 	return blocks
+}
+
+func getMissingHashIds(db *sql.DB) []uint {
+	currentLastId := getLatestHashId(db)
+	rows, err := db.Query(getMissingHashRowIdsSql)
+	if err != nil {
+		log.Println("Error when querying DB: ", err)
+		return make([]uint, 0)
+	}
+	var hashId uint
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	var ids []uint
+	for rows.Next() {
+		err = rows.Scan(&hashId)
+		if hashId < currentLastId {
+			// avoid repeatedly asking for next block if the DB is synced
+			ids = append(ids, hashId)
+		}
+	}
+	return ids
+}
+
+func getMissingXuniIds(db *sql.DB) []uint {
+	currentLastId := getLatestXuniId(db)
+	rows, err := db.Query(getMissingXuniRowIdsSql)
+	if err != nil {
+		log.Println("Error when querying DB: ", err)
+		return make([]uint, 0)
+	}
+	var hashId uint
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	var ids []uint
+	for rows.Next() {
+		err = rows.Scan(&hashId)
+		if hashId < currentLastId {
+			// avoid repeatedly asking for next block if the DB is synced
+			ids = append(ids, hashId)
+		}
+	}
+	return ids
 }
 
 func getCurrentHeight(db *sql.DB) uint {
@@ -245,4 +295,24 @@ func getAllBlocks(db *sql.DB) (c chan Block) {
 		}
 	}()
 	return c
+}
+
+func getHash(db *sql.DB, id uint) (*HashRecord, error) {
+	row := db.QueryRow(getHashByIdSql, fmt.Sprintf("%d", id))
+	var record HashRecord
+	err := row.Scan(&record.Id, &record.CreatedAt, &record.Key, &record.HashToVerify, &record.Account)
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func getXuni(db *sql.DB, id uint) (*HashRecord, error) {
+	row := db.QueryRow(getXuniByIdSql, fmt.Sprintf("%d", id))
+	var record HashRecord
+	err := row.Scan(&record.Id, &record.CreatedAt, &record.Key, &record.HashToVerify, &record.Account)
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
 }

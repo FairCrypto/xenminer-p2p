@@ -71,6 +71,11 @@ type Record struct {
 	Key          string  `json:"key"`
 }
 
+type RawDataReq struct {
+	IsXuni bool   `json:"is_xuni"`
+	Ids    []uint `json:"ids"`
+}
+
 type Height struct {
 	Max sql.NullInt32 `json:"max_height"`
 }
@@ -84,6 +89,7 @@ type Topics struct {
 	blockHeight *pubsub.Topic
 	data        *pubsub.Topic
 	get         *pubsub.Topic
+	getRaw      *pubsub.Topic
 }
 
 type Subs struct {
@@ -93,6 +99,7 @@ type Subs struct {
 	blockHeight *pubsub.Subscription
 	data        *pubsub.Subscription
 	get         *pubsub.Subscription
+	getRaw      *pubsub.Subscription
 }
 
 type NetworkState struct {
@@ -202,6 +209,57 @@ func processGet(ctx context.Context) {
 				// logger.Info("SENT", blockId)
 			} else {
 				logger.Debug("!BLOCK", blockId)
+				err = nil
+			}
+		}
+		runtime.Gosched()
+	}
+}
+
+func processGetRaw(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
+	db := ctx.Value("db").(*sql.DB)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	for {
+		msg, err := subs.getRaw.Next(ctx)
+		if msg.ReceivedFrom.String() == peerId {
+			continue
+		}
+		if err != nil {
+			logger.Warn("Error getting get raw message: ", err)
+		}
+		var req RawDataReq
+		err = json.Unmarshal(msg.Data, &req)
+		if err != nil {
+			logger.Warn("Error converting get raw message: ", err)
+		}
+		logger.Debug("WANT raw ids (s): ", req.Ids, " (xuni=", req.IsXuni, ")")
+		for _, recordId := range req.Ids {
+			var getRecord = getHash
+			if req.IsXuni {
+				getRecord = getXuni
+			}
+			record, err := getRecord(db, recordId)
+			// NB: ignoring the error which might result from missing blocks
+			if err == nil {
+				bytes, err := json.Marshal(*record)
+				if err != nil {
+					logger.Warn("Error converting hash record to data: ", err)
+				}
+				if req.IsXuni {
+					err = topics.newXuni.Publish(ctx, bytes)
+				} else {
+					err = topics.newHash.Publish(ctx, bytes)
+				}
+				if err != nil {
+					logger.Warn("Error publishing raw data record message: ", err)
+				}
+				logger.Debug("SENT REC", recordId, " (xuni=", req.IsXuni, ")")
+			} else {
+				logger.Debug("!RECORD", recordId)
 				err = nil
 			}
 		}
@@ -454,7 +512,7 @@ func broadcastLastHash(ctx context.Context) {
 func processNewHash(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
 	topics := ctx.Value("topics").(Topics)
-	// db := ctx.Value("db").(*sql.DB)
+	dbh := ctx.Value("dbh").(*sql.DB)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
@@ -467,6 +525,7 @@ func processNewHash(ctx context.Context) {
 	// queue := make([]HashMap, 0)
 
 	cHash := make(chan HashRecord, 1)
+	cXuni := make(chan HashRecord, 1)
 	cState := make(chan NetworkState, 1)
 
 	go func() {
@@ -481,6 +540,22 @@ func processNewHash(ctx context.Context) {
 				logger.Warn("Error decoding message: ", err)
 			}
 			cHash <- hash
+			runtime.Gosched()
+		}
+	}()
+
+	go func() {
+		for {
+			msg, err := subs.newXuni.Next(ctx)
+			if msg.ReceivedFrom.String() == peerId {
+				continue
+			}
+			var hash HashRecord
+			err = json.Unmarshal(msg.Data, &hash)
+			if err != nil {
+				logger.Warn("Error decoding message: ", err)
+			}
+			cXuni <- hash
 			runtime.Gosched()
 		}
 	}()
@@ -504,31 +579,59 @@ func processNewHash(ctx context.Context) {
 	var lastTs uint = 0
 	for {
 		select {
+		case xuni := <-cXuni:
+			// logger.Info("Discovered New Hash Id ", hash.Id)
+			// validate hash and save it to blocks.db / xuni.db
+			if peerId != masterPeerId {
+				some, _ := getXuni(dbh, xuni.Id)
+				if some == nil {
+					err := insertXuniRecord(dbh, xuni)
+					if err != nil {
+						logger.Warn("Error inserting xuni to DBH: ", err)
+					}
+				}
+			}
+
 		case hash := <-cHash:
 			// logger.Info("Discovered New Hash Id ", hash.Id)
-			state.LastHashId = uint64(hash.Id)
-			countPre := len(hashMap)
-			hashMap[hash.Id] = uint(time.Now().Unix())
-			if len(hashMap) > countPre {
-				if lastTs == 0 {
-					lastTs = uint(time.Now().Unix())
+			lastHash := getLatestHashId(dbh)
+			// validate hash and save it to blocks.db / xuni.db
+			if peerId != masterPeerId {
+				some, _ := getHash(dbh, hash.Id)
+				if some == nil {
+					err := insertHashRecord(dbh, hash)
+					if err != nil {
+						logger.Warn("Error inserting hash to DBH: ", err)
+					}
 				}
-				if len(hashMap)%interval == 0 {
-					difficulty := interval / float32(uint(time.Now().Unix())-lastTs)
-					state.Difficulty = difficulty
-					state.ShiftNumber++
-					logger.Infof("Difficulty %f, shift %d ", difficulty, state.ShiftNumber)
+			}
 
-					data, err := json.Marshal(*state)
-					if err != nil {
-						logger.Warn("Error encoding data message: ", err)
+			if hash.Id > lastHash {
+
+				state.LastHashId = uint64(hash.Id)
+				countPre := len(hashMap)
+				hashMap[hash.Id] = uint(time.Now().Unix())
+				if len(hashMap) > countPre {
+					if lastTs == 0 {
+						lastTs = uint(time.Now().Unix())
 					}
-					err = topics.shift.Publish(ctx, data)
-					if err != nil {
-						logger.Warn("Error publishing data message: ", err)
+					if len(hashMap)%interval == 0 {
+						difficulty := interval / float32(uint(time.Now().Unix())-lastTs)
+						state.Difficulty = difficulty
+						state.ShiftNumber++
+						logger.Infof("Difficulty %f, shift %d ", difficulty, state.ShiftNumber)
+
+						data, err := json.Marshal(*state)
+						if err != nil {
+							logger.Warn("Error encoding data message: ", err)
+						}
+						err = topics.shift.Publish(ctx, data)
+						if err != nil {
+							logger.Warn("Error publishing data message: ", err)
+						}
+						lastTs = 0
+						hashMap = map[uint]uint{}
 					}
-					lastTs = 0
-					hashMap = map[uint]uint{}
 				}
 			}
 
@@ -560,61 +663,53 @@ func processNewHash(ctx context.Context) {
 	}
 }
 
-func runShifts(ctx context.Context) {
-	subs := ctx.Value("subs").(Subs)
+func requestMissingHashesAndXunis(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
-	peerId := ctx.Value("peerId").(string)
+	dbh := ctx.Value("dbh").(*sql.DB)
 	logger := ctx.Value("logger").(log0.EventLogger)
-	state := ctx.Value("state").(*NetworkState)
 
-	// TODO: refactor to config !!!
-	const shiftDuration = 60 * time.Second
-
-	c := make(chan uint64, 1)
-
-	go func() {
-		for {
-			msg, err := subs.shift.Next(ctx)
-			if msg.ReceivedFrom.String() == peerId {
-				continue
-			}
-			var currentShift uint64
-			err = json.Unmarshal(msg.Data, &currentShift)
-			if err != nil {
-				logger.Warn("Error decoding message: ", err)
-			}
-			c <- currentShift
-			runtime.Gosched()
-		}
-	}()
+	t := time.NewTicker(1 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
 
 	for {
 		select {
-		case shift := <-c:
-			logger.Infof(
-				"received shift %d (%d)",
-				shift,
-				state.ShiftNumber,
-			)
-			if shift > state.ShiftNumber {
-				state.ShiftNumber = shift
+		case <-t.C:
+			hashIds := getMissingHashIds(dbh)
+			if len(hashIds) > 0 {
+				bytes, err := json.Marshal(RawDataReq{
+					IsXuni: false,
+					Ids:    hashIds,
+				})
+				if err != nil {
+					logger.Warn("Error converting hashIds: ", err)
+				}
+				err = topics.getRaw.Publish(ctx, bytes)
+				if err != nil {
+					logger.Warn("Error publishing message: ", err)
+				}
+				logger.Debug("WANT RAW: ", hashIds, " (xuni=false)")
 			}
-
-		case <-time.After(shiftDuration):
-			logger.Info("timeout waiting for shift")
-			state.ShiftNumber++
-			data, err := json.Marshal(state.ShiftNumber)
-			if err != nil {
-				logger.Warn("Error encoding message: ", err)
+			xuniIds := getMissingXuniIds(dbh)
+			if len(xuniIds) > 0 {
+				bytes, err := json.Marshal(RawDataReq{
+					IsXuni: true,
+					Ids:    xuniIds,
+				})
+				if err != nil {
+					logger.Warn("Error converting xuniIds: ", err)
+				}
+				err = topics.getRaw.Publish(ctx, bytes)
+				if err != nil {
+					logger.Warn("Error publishing message: ", err)
+				}
+				logger.Debug("WANT RAW: ", hashIds, " (xuni=true)")
 			}
-			err = topics.shift.Publish(ctx, data)
-			if err != nil {
-				logger.Warn("Error publishing message: ", err)
-			}
-			logger.Infof("published shift %d", state.ShiftNumber)
+		case <-quit:
+			t.Stop()
+			return
 		}
 	}
-
 }
 
 func main() {
@@ -775,6 +870,9 @@ func main() {
 	go processGet(ctx)
 
 	wg.Add(1)
+	go processGetRaw(ctx)
+
+	wg.Add(1)
 	go processNewHash(ctx)
 
 	wg.Add(1)
@@ -784,8 +882,8 @@ func main() {
 		wg.Add(1)
 		go broadcastLastHash(ctx)
 	} else {
-		// wg.Add(1)
-		// go runShifts(ctx)
+		wg.Add(1)
+		go requestMissingHashesAndXunis(ctx)
 	}
 
 	if *client {
@@ -803,5 +901,4 @@ func main() {
 
 	// wait until interrupted
 	wg.Wait()
-
 }

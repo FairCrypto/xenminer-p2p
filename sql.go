@@ -31,8 +31,37 @@ const (
 	getMissingRowIdsBlockchainSql = `
 		select id+1 from blockchain bo 
 		where not exists (
-			select null from blockchain bi where bi.id = bo.id + 1
-		) group by id limit 10	
+			select null 
+			from blockchain bi 
+			where bi.id = bo.id + 1
+		) group by id 
+		limit 10	
+	`
+
+	getMissingHashRowIdsSql = `
+		select block_id+1 from blocks bo                 
+		where not exists (
+			select null 
+			from blocks bi 
+			where bi.block_id = bo.block_id + 1
+			order by block_id asc
+		) 
+		group by block_id 
+		order by block_id asc 
+		limit 10	
+	`
+
+	getMissingXuniRowIdsSql = `
+		select id+1 from xuni xo 
+		where not exists (
+			select null 
+			from xuni xi 
+			where xi.id = xo.id + 1
+			order by id asc
+		) 
+		group by id 
+		order by id asc 
+		limit 10	
 	`
 
 	initDbSql = `VACUUM;`
@@ -82,5 +111,13 @@ const (
 
 	getLatestXuniSql string = `
 		SELECT * FROM xuni ORDER BY id DESC LIMIT 1;
+	`
+
+	getHashByIdSql string = `
+		SELECT * FROM blocks WHERE block_id = ?;
+	`
+
+	getXuniByIdSql string = `
+		SELECT * FROM xuni WHERE id = ?;
 	`
 )

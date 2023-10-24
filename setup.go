@@ -94,68 +94,6 @@ func prepareBootstrapAddresses(path string, logger log0.EventLogger) []string {
 	return destinations
 }
 
-func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topics, subs Subs) {
-	var err error
-	topics.blockHeight, err = ps.Join("block_height")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.blockHeight, err = topics.blockHeight.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.get, err = ps.Join("get")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.get, err = topics.get.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.data, err = ps.Join("data")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.data, err = topics.data.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.newHash, err = ps.Join("new_hash")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.newHash, err = topics.newHash.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.newXuni, err = ps.Join("new_xuni")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.newXuni, err = topics.newXuni.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	topics.shift, err = ps.Join("shift")
-	if err != nil {
-		logger.Error("Error joining topic", err)
-	}
-	subs.shift, err = topics.shift.Subscribe()
-	if err != nil {
-		logger.Error("Error subscribing to topic", err)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-	return
-}
-
 var toAddrInfo = func(destination string, _ int) peer.AddrInfo {
 	address, err := multiaddr.NewMultiaddr(destination)
 	if err != nil {
@@ -337,5 +275,75 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 		logger.Info("Connected to:", p)
 	}
 	return routingDiscovery
+}
 
+func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topics, subs Subs) {
+	var err error
+	topics.blockHeight, err = ps.Join("block_height")
+	if err != nil {
+		logger.Error("Error joining topic 'block_height'", err)
+	}
+	subs.blockHeight, err = topics.blockHeight.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'block_height'", err)
+	}
+
+	topics.get, err = ps.Join("get")
+	if err != nil {
+		logger.Error("Error joining topic 'get'", err)
+	}
+	subs.get, err = topics.get.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'get'", err)
+	}
+
+	topics.data, err = ps.Join("data")
+	if err != nil {
+		logger.Error("Error joining topic 'data'", err)
+	}
+	subs.data, err = topics.data.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'data'", err)
+	}
+
+	topics.newHash, err = ps.Join("new_hash")
+	if err != nil {
+		logger.Error("Error joining topic 'new_hash'", err)
+	}
+	subs.newHash, err = topics.newHash.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'new_hash'", err)
+	}
+
+	topics.newXuni, err = ps.Join("new_xuni")
+	if err != nil {
+		logger.Error("Error joining topic 'new_xuni'", err)
+	}
+	subs.newXuni, err = topics.newXuni.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'new_xuni'", err)
+	}
+
+	topics.shift, err = ps.Join("shift")
+	if err != nil {
+		logger.Error("Error joining topic 'shift'", err)
+	}
+	subs.shift, err = topics.shift.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'shift'", err)
+	}
+
+	topics.getRaw, err = ps.Join("get_raw")
+	if err != nil {
+		logger.Error("Error joining topic 'get_raw'", err)
+	}
+	subs.getRaw, err = topics.getRaw.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'get_raw'", err)
+	}
+
+	if err != nil {
+		panic(err)
+	}
+	return
 }
