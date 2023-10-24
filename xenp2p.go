@@ -259,7 +259,7 @@ func processGetRaw(ctx context.Context) {
 				}
 				logger.Debug("SENT REC", recordId, " (xuni=", req.IsXuni, ")")
 			} else {
-				logger.Debug("!RECORD", recordId)
+				// logger.Debug("!RECORD", recordId)
 				err = nil
 			}
 		}
@@ -636,13 +636,15 @@ func processNewHash(ctx context.Context) {
 			}
 
 		case gotState := <-cState:
-			logger.Infof(
-				"received shift %d (%d), diff %f (%f)",
-				gotState.ShiftNumber,
-				state.ShiftNumber,
-				gotState.Difficulty,
-				state.Difficulty,
-			)
+			/*
+				logger.Infof(
+					"received shift %d (%d), diff %f (%f)",
+					gotState.ShiftNumber,
+					state.ShiftNumber,
+					gotState.Difficulty,
+					state.Difficulty,
+				)
+			*/
 			if gotState.ShiftNumber > state.ShiftNumber {
 				if state.ShiftNumber == 0 || gotState.ShiftNumber-state.ShiftNumber > 5 {
 					lastTs = 0
