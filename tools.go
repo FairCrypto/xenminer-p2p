@@ -75,7 +75,7 @@ func initNode(path0 string, logger log0.EventLogger) {
 	}
 }
 
-func resetNode(path0 string, logger log0.EventLogger) {
+func resetBlockchainDb(path0 string, logger log0.EventLogger) {
 	err := godotenv.Load(path0 + "/.env")
 	var dbPath = ""
 	if err != nil {
@@ -100,6 +100,42 @@ func resetNode(path0 string, logger log0.EventLogger) {
 		log.Fatal("Error closing DB: ", err)
 	}
 	logger.Info("Reset DB")
+}
+
+func resetHashesDb(path0 string, logger log0.EventLogger) {
+	err := godotenv.Load(path0 + "/.env")
+	var dbhPath = ""
+	if err != nil {
+		err = nil
+	}
+	dbhPath = os.Getenv("DBH_LOCATION")
+	if dbhPath == "" {
+		dbhPath = "file:" + path0 + "/blocks.db?cache=shared&"
+	} else {
+		dbhPath = "file:" + dbhPath + "?cache=shared&"
+	}
+
+	logger.Info("DBH path: ", dbhPath)
+	dbh, err := sql.Open("sqlite3", dbhPath)
+	if err != nil {
+		log.Fatal("Error when opening hashes DB file: ", err)
+	}
+	_, err = dbh.Exec(resetHashesSql)
+	if err != nil {
+		log.Fatal("Error resetting hashes DB: ", err)
+	}
+	logger.Info("Hashes DB was reset")
+	_, err = dbh.Exec(resetXunisSql)
+	if err != nil {
+		log.Fatal("Error resetting xunis DB: ", err)
+	}
+	logger.Info("Xunis DB was reset")
+	err = dbh.Close()
+	if err != nil {
+		log.Fatal("Error closing DBH: ", err)
+	} else {
+		logger.Info("DBH was closed")
+	}
 }
 
 func syncHashes(path0 string, logger log0.EventLogger) {

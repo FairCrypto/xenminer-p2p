@@ -212,10 +212,10 @@ func getLatestHash(db *sql.DB) *HashRecord {
 	rows.Next()
 	err = rows.Scan(
 		&hash.Id,
-		&hash.CreatedAt,
-		&hash.Key,
 		&hash.HashToVerify,
+		&hash.Key,
 		&hash.Account,
+		&hash.CreatedAt,
 	)
 	if err != nil {
 		log.Println("Error retrieving data from HDB: ", err)
@@ -239,10 +239,10 @@ func getLatestXuni(db *sql.DB) *HashRecord {
 	rows.Next()
 	err = rows.Scan(
 		&hash.Id,
-		&hash.CreatedAt,
-		&hash.Key,
 		&hash.HashToVerify,
+		&hash.Key,
 		&hash.Account,
+		&hash.CreatedAt,
 	)
 	if err != nil {
 		log.Println("Error retrieving data from HDB: ", err)

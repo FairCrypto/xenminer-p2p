@@ -12,7 +12,8 @@ const (
 	`
 
 	getMaxHeightBlockchainSql string = `
-		SELECT MAX(id) as max_height FROM blockchain;
+		SELECT MAX(id) as max_height 
+		FROM blockchain;
 	`
 
 	insertBlockchainSql = `
@@ -21,11 +22,14 @@ const (
 	`
 
 	getRowBlockchainSql string = `
-		SELECT * FROM blockchain WHERE id = ?;
+		SELECT id, timestamp, prev_hash, merkle_root, records_json, block_hash 
+		FROM blockchain 
+		WHERE id = ?;
 	`
 
 	getAllRowsBlockchainSql string = `
-		SELECT * FROM blockchain;
+		SELECT id, timestamp, prev_hash, merkle_root, records_json, block_hash 
+		FROM blockchain;
 	`
 
 	getMissingRowIdsBlockchainSql = `
@@ -68,6 +72,10 @@ const (
 
 	resetDbSql = `delete from blockchain;`
 
+	resetHashesSql = `delete from blocks;`
+
+	resetXunisSql = `delete from xuni;`
+
 	createHashesTableSql = `
 		CREATE TABLE IF NOT EXISTS blocks (
     		block_id INTEGER PRIMARY KEY,
@@ -98,26 +106,38 @@ const (
 		VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 	getLatestHashIdSql string = `
-		SELECT MAX(block_id) as latest_hash_id FROM blocks;
+		SELECT MAX(block_id) as latest_hash_id 
+		FROM blocks;
 	`
 
 	getLatestXuniIdSql string = `
-		SELECT MAX(id) as latest_xuni_id FROM xuni;
+		SELECT MAX(id) as latest_xuni_id 
+		FROM xuni;
 	`
 
 	getLatestHashSql string = `
-		SELECT * FROM blocks ORDER BY block_id DESC LIMIT 1;
+		SELECT block_id, hash_to_verify, key, account, created_at 
+		FROM blocks 
+		ORDER BY block_id DESC 
+		LIMIT 1;
 	`
 
 	getLatestXuniSql string = `
-		SELECT * FROM xuni ORDER BY id DESC LIMIT 1;
+		SELECT id, hash_to_verify, key, account, created_at 
+		FROM xuni 
+		ORDER BY id DESC 
+		LIMIT 1;
 	`
 
 	getHashByIdSql string = `
-		SELECT * FROM blocks WHERE block_id = ?;
+		SELECT block_id, hash_to_verify, key, account, created_at 
+		FROM blocks 
+		WHERE block_id = ?;
 	`
 
 	getXuniByIdSql string = `
-		SELECT * FROM xuni WHERE id = ?;
+		SELECT id, hash_to_verify, key, account, created_at  
+		FROM xuni 
+		WHERE id = ?;
 	`
 )

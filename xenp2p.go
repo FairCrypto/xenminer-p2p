@@ -718,13 +718,16 @@ func main() {
 
 	logger := log0.Logger("xen-blocks")
 
-	init := flag.Bool("init", false, "init node")
-	reset := flag.Bool("reset", false, "reset node")
-	syncBlocksToHashes := flag.Bool("hashes", false, "sync hashes")
+	init := flag.Bool("init", false, "init node and exit")
+	reset := flag.Bool("reset", false, "reset all node's DBs")
+	resetBlockchain := flag.Bool("reset-blockchain", false, "reset node's blockchain DB")
+	resetHashes := flag.Bool("reset-hashes", false, "reset node's raw hashes DB")
+	syncBlocksToHashes := flag.Bool("hashes", false, "sync raw hashes and exit")
+	// backfill := flag.Bool("backfill", false, "back-fill raw hashes in the background")
 	configPath := flag.String("config", ".node", "path to config file")
 	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
 	client := flag.Bool("client", false, "start in client-only mode")
-	logLevel := flag.String("log", "warn", "log level")
+	logLevel := flag.String("log", "warn", "set log level")
 	flag.Parse()
 
 	if *logLevel != "" {
@@ -746,8 +749,11 @@ func main() {
 		syncHashes(*configPath, logger)
 		os.Exit(0)
 	}
-	if *reset {
-		resetNode(*configPath, logger)
+	if *resetBlockchain || *reset {
+		resetBlockchainDb(*configPath, logger)
+	}
+	if *resetHashes || *reset {
+		resetHashesDb(*configPath, logger)
 	}
 
 	logger.Info("Loading config from", *configPath)
@@ -884,8 +890,8 @@ func main() {
 		wg.Add(1)
 		go broadcastLastHash(ctx)
 	} else {
-		wg.Add(1)
-		go requestMissingHashesAndXunis(ctx)
+		// wg.Add(1)
+		// go requestMissingHashesAndXunis(ctx)
 	}
 
 	if *client {
