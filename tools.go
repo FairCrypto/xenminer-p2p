@@ -147,7 +147,9 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 	}
 	dbPath = os.Getenv("DB_LOCATION")
 	if dbPath == "" {
-		dbPath = path0 + "/blockchain.db?cache=shared&mode=rwc&_journal_mode=WAL"
+		dbPath = path0 + "/blockchain.db?cache=shared&mode=ro"
+	} else {
+		dbhPath = "file:" + dbhPath + "?cache=shared&mode=ro"
 	}
 
 	logger.Info("Opening DB: ", dbPath)
@@ -158,9 +160,9 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 
 	dbhPath = os.Getenv("DBH_LOCATION")
 	if dbhPath == "" {
-		dbhPath = "file:" + path0 + "/blocks.db?cache=shared&"
+		dbhPath = "file:" + path0 + "/blocks.db?cache=shared&mode=rwc&_journal_mode=WAL"
 	} else {
-		dbhPath = "file:" + dbhPath + "?cache=shared&"
+		dbhPath = "file:" + dbhPath + "?cache=shared&mode=rwc&_journal_mode=WAL"
 	}
 
 	logger.Info("DBH path: ", dbhPath)
