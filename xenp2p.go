@@ -597,6 +597,7 @@ func processNewHash(ctx context.Context) {
 			lastHash := getLatestHashId(dbh)
 			// validate hash and save it to blocks.db / xuni.db
 			if peerId != masterPeerId {
+				logger.Debug("New RAW data record ID: ", hash.Id)
 				some, _ := getHash(dbh, hash.Id)
 				if some == nil {
 					err := insertHashRecord(dbh, hash)
@@ -607,7 +608,6 @@ func processNewHash(ctx context.Context) {
 			}
 
 			if hash.Id > lastHash {
-
 				state.LastHashId = uint64(hash.Id)
 				countPre := len(hashMap)
 				hashMap[hash.Id] = uint(time.Now().Unix())
