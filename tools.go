@@ -105,6 +105,7 @@ func resetNode(path0 string, logger log0.EventLogger) {
 func syncHashes(path0 string, logger log0.EventLogger) {
 	err := godotenv.Load(path0 + "/.env")
 	var dbPath = ""
+	var dbhPath = ""
 	if err != nil {
 		err = nil
 	}
@@ -119,12 +120,25 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 		log.Fatal("Error when opening DB file: ", err)
 	}
 
-	_, err = db.Exec(createHashesTableSql)
+	dbhPath = os.Getenv("DBH_LOCATION")
+	if dbhPath == "" {
+		dbhPath = "file:" + path0 + "/blocks.db?cache=shared&"
+	} else {
+		dbhPath = "file:" + dbhPath + "?cache=shared&"
+	}
+
+	logger.Info("DBH path: ", dbhPath)
+	dbh, err := sql.Open("sqlite3", dbhPath)
+	if err != nil {
+		log.Fatal("Error when opening hashes DBH file: ", err)
+	}
+
+	_, err = dbh.Exec(createHashesTableSql)
 	if err != nil {
 		log.Fatal("Error creating hashes table: ", err)
 	}
 
-	_, err = db.Exec(createXunisTableSql)
+	_, err = dbh.Exec(createXunisTableSql)
 	if err != nil {
 		log.Fatal("Error creating xunis table: ", err)
 	}
@@ -152,7 +166,7 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 					HashToVerify: rec.HashToVerify,
 					Key:          rec.Key,
 				}
-				err = insertXuniRecord(db, hashRec)
+				err = insertXuniRecord(dbh, hashRec)
 				xuni++
 			} else {
 				hashRec = HashRecord{
@@ -163,7 +177,7 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 					HashToVerify: rec.HashToVerify,
 					Key:          rec.Key,
 				}
-				err = insertHashRecord(db, hashRec)
+				err = insertHashRecord(dbh, hashRec)
 				xen11++
 			}
 			if err != nil {
@@ -184,4 +198,9 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 		log.Fatal("Error closing DB: ", err)
 	}
 	logger.Info("Done with DB")
+	err = dbh.Close()
+	if err != nil {
+		log.Fatal("Error closing DBH: ", err)
+	}
+	logger.Info("Done with DBH")
 }
