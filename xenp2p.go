@@ -839,10 +839,13 @@ func main() {
 	}
 
 	if *source != "" {
-		// id, _ := peer.IDFromBytes([]byte(*source))
-		doSend(ctx, peers[0].ID)
+		id, err := peer.Decode(*source)
+		if err != nil {
+			log.Fatal("Error ", err)
+		}
+		doSend(ctx, id)
 	} else if *sink != "" {
-		id, err := peer.IDFromBytes([]byte(*sink))
+		id, err := peer.Decode(*sink)
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
