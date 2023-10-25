@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
 	"os"
 )
@@ -252,21 +253,9 @@ func doSend(ctx context.Context, id peer.ID) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	c := make(chan []byte)
-
 	buf := make([]byte, 128)
 	// then we can call rand.Read.
-
-	go func() {
-		for {
-			_, err := rand.Read(buf)
-			if err != nil {
-				logger.Warn("Err in rand ", err)
-			}
-			c <- buf
-		}
-	}()
-
-	conn, err := h.NewStream(context.Background(), id, "aaa")
+	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 	logger.Info("Connection ", conn.Stat())
@@ -274,13 +263,24 @@ func doSend(ctx context.Context, id peer.ID) {
 		logger.Fatal("Error: ", err)
 	}
 
+	go func() {
+		for {
+			_, err := rand.Read(buf)
+			if err != nil {
+				logger.Warn("Err in rand ", err)
+			}
+			logger.Info("Rand ", buf)
+			c <- buf
+		}
+	}()
+
 	select {
 	case bytes := <-c:
 		logger.Info(bytes)
-		n, err := rw.Write(append(bytes, 0))
+		n, err := rw.Write(append(bytes, '\n'))
 		logger.Infof("Written %d bytes", n)
 		if err != nil {
-			logger.Fatal("Error: ", err)
+			logger.Warn("Error: ", err)
 		} else {
 			fmt.Print(".")
 		}
@@ -303,7 +303,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	h.SetStreamHandler("aaa", func(s network.Stream) {
+	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
 		log.Println("listener received new stream")
 		if err := decode(s); err != nil {
 			log.Println("Error in stream ", err)
