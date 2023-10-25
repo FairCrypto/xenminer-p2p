@@ -263,6 +263,7 @@ func doSend(ctx context.Context, id peer.ID) {
 			if err != nil {
 				logger.Warn("Err in rand ", err)
 			}
+			c <- buf
 		}
 	}()
 
@@ -303,9 +304,9 @@ func doReceive(ctx context.Context, id peer.ID) {
 		log.Println("listener received new stream")
 		if err := decode(s); err != nil {
 			log.Println(err)
-			s.Reset()
+			// s.Reset()
 		} else {
-			s.Close()
+			err = s.Close()
 		}
 	})
 	<-ctx.Done()
