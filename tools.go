@@ -344,6 +344,7 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 			n, err := rw.Read(buff)
 			if err != nil {
 				logger.Warn("read err: ", err)
+				quit <- struct{}{}
 				return
 			} else {
 				count += n
