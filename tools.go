@@ -323,12 +323,13 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 		for {
 			n, err := rw.Read(buff)
 			if err != nil {
-				logger.Warn("err", err)
+				logger.Warn("read err: ", err)
+				return
 			} else {
 				count += n
-				_, err = rw.WriteString(fmt.Sprintf("%d", series))
+				_, err = rw.WriteString(fmt.Sprintf("%d\n", series))
 				if err != nil {
-					logger.Warn("err", err)
+					logger.Warn("write err: ", err)
 				}
 			}
 		}
