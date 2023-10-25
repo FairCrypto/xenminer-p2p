@@ -256,12 +256,14 @@ func doSend(ctx context.Context, id peer.ID) {
 	buf := make([]byte, 16)
 	// then we can call rand.Read.
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
-	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-
-	logger.Info("Connection ", conn.Stat())
 	if err != nil {
 		logger.Warn("Err in conn ", err)
 	}
+
+	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
+	logger.Info("Connection ", conn.Stat())
+
 	if err != nil {
 		logger.Fatal("Error: ", err)
 	}
@@ -315,5 +317,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 	})
 	logger.Info("Listening")
 
-	<-ctx.Done()
+	// <-ctx.Done()
+
+	select {}
 }
