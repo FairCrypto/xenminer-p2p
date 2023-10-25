@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -12,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
@@ -280,24 +282,32 @@ func doSend(ctx context.Context, id peer.ID) {
 	}
 }
 
+func decode(s network.Stream) error {
+	buf := bufio.NewReader(s)
+	str, err := buf.ReadString('\n')
+	if err != nil {
+		return err
+	}
+
+	log.Printf("read: %s", str)
+	_, err = s.Write([]byte(str))
+	return err
+}
+
 func doReceive(ctx context.Context, id peer.ID) {
 	log.Println("receiving")
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	conn, err := h.NewStream(ctx, id, protocol.TestingID)
-	if err != nil {
-		logger.Fatal("Error: ", err)
-	}
-
-	buf := make([]byte, 128)
-
-	for {
-		_, err = conn.Read(buf)
-		if err != nil {
-			logger.Fatal("Error: ", err)
+	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
+		log.Println("listener received new stream")
+		if err := decode(s); err != nil {
+			log.Println(err)
+			s.Reset()
 		} else {
-			fmt.Print(".")
+			s.Close()
 		}
-	}
+	})
+
+	logger.Info("Listening")
 }
