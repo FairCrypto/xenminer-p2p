@@ -290,10 +290,9 @@ func doSend(ctx context.Context, id peer.ID) {
 			count = 0
 
 		case bytes := <-c:
-			logger.Info(bytes)
 			n, err := rw.Write(bytes)
 			count += n
-			err = rw.Flush()
+			// err = rw.Flush()
 			// logger.Infof("Written %d bytes", n)
 			if err != nil {
 				logger.Warn("Error: ", err)
@@ -308,19 +307,28 @@ func doSend(ctx context.Context, id peer.ID) {
 
 func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
 	buff := make([]byte, 512)
-	// t := time.NewTicker(1 * time.Second)
-	// count := 0
+	t := time.NewTicker(1 * time.Second)
+	count := 0
+
+	go func() {
+		for {
+			n, err := rw.Read(buff)
+			if err != nil {
+				logger.Warn("err", err)
+			} else {
+				count += n
+			}
+		}
+	}()
 
 	for {
-		_, err := rw.Read(buff)
-		if err != nil {
-			logger.Warn("!!! ", err)
-			_ = s.Close()
-			return err
-		} else {
-			fmt.Print()
+		select {
+		case <-t.C:
+			logger.Infof("Rec %d byte/s", count)
+			count = 0
 		}
 	}
+
 }
 
 func doReceive(ctx context.Context, id peer.ID) {
