@@ -300,8 +300,8 @@ func decode(s network.Stream) {
 			log.Fatal("Err ", err)
 		}
 		log.Printf("read: %d", bytes)
-		// n, err := rw.Write(append(make([]byte, 1), '\n'))
-		// log.Printf("written: %d", n)
+		n, err := rw.Write(append(make([]byte, 1), 0))
+		log.Printf("written: %d", n)
 	}
 }
 
