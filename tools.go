@@ -266,7 +266,9 @@ func doSend(ctx context.Context, id peer.ID) {
 		}
 	}()
 
-	conn, err := h.NewStream(ctx, id, "aaa")
+	conn, err := h.NewStream(context.Background(), id, "aaa")
+	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
 	logger.Info("Connection ", conn.Stat())
 	if err != nil {
 		logger.Fatal("Error: ", err)
@@ -275,7 +277,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	select {
 	case bytes := <-c:
 		logger.Info(bytes)
-		n, err := conn.Write(append(bytes))
+		n, err := rw.Write(append(bytes, 0))
 		logger.Infof("Written %d bytes", n)
 		if err != nil {
 			logger.Fatal("Error: ", err)
@@ -286,9 +288,9 @@ func doSend(ctx context.Context, id peer.ID) {
 }
 
 func decode(s network.Stream) error {
-	buf := bufio.NewReader(s)
+	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 
-	bytes, err := buf.ReadBytes('\n')
+	bytes, err := rw.ReadBytes('\n')
 	if err != nil {
 		return err
 	}
