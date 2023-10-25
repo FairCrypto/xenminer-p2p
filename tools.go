@@ -305,12 +305,9 @@ func doReceive(ctx context.Context, id peer.ID) {
 		log.Println("listener received new stream")
 		if err := decode(s); err != nil {
 			log.Println("Error in stream ", err)
-			// s.Reset()
-		} else {
-			// err = s.Close()
 		}
 	})
-	<-ctx.Done()
-
 	logger.Info("Listening")
+
+	<-ctx.Done()
 }
