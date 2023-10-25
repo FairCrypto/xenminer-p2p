@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -257,6 +258,8 @@ func doSend(ctx context.Context, id peer.ID) {
 	buf := make([]byte, 512)
 	t := time.NewTicker(1 * time.Second)
 	count := 0
+	series := 0
+	times := map[int]int{}
 
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	if err != nil {
@@ -287,7 +290,8 @@ func doSend(ctx context.Context, id peer.ID) {
 			if err != nil {
 				logger.Warn("Err in rand ", err)
 			}
-			logger.Info("Rand ", s)
+			i, err := strconv.Atoi(s)
+			logger.Infof("Read: %d, delta: %d", i, int(time.Now().UnixMilli())-times[i])
 		}
 	}()
 
@@ -300,8 +304,8 @@ func doSend(ctx context.Context, id peer.ID) {
 		case bytes := <-c:
 			n, err := rw.Write(bytes)
 			count += n
-			// err = rw.Flush()
-			// logger.Infof("Written %d bytes", n)
+			times[series] = int(time.Now().UnixMilli())
+			series++
 			if err != nil {
 				logger.Warn("Error: ", err)
 				return
@@ -328,6 +332,7 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 			} else {
 				count += n
 				_, err = rw.WriteString(fmt.Sprintf("%d\n", series))
+				series++
 				if err != nil {
 					logger.Warn("write err: ", err)
 				}
