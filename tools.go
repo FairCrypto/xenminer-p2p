@@ -295,7 +295,7 @@ func decode(s network.Stream) {
 	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 	log.Println("Reading stream")
 	for {
-		bytes, err := rw.ReadBytes('\n')
+		bytes, err := rw.ReadBytes(0)
 		if err != nil {
 			log.Fatal("Err ", err)
 		}
