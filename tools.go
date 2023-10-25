@@ -263,7 +263,7 @@ func doSend(ctx context.Context, id peer.ID) {
 		logger.Warn("Err in conn ", err)
 	}
 
-	rw := bufio.NewWriter(conn)
+	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 	logger.Info("Connection ", conn.Stat())
 
@@ -277,9 +277,17 @@ func doSend(ctx context.Context, id peer.ID) {
 			if err != nil {
 				logger.Warn("Err in rand ", err)
 			}
-			// logger.Info("Rand ", buf)
 			c <- buf
-			// time.Sleep(time.Second)
+		}
+	}()
+
+	go func() {
+		for {
+			s, err := rw.ReadString('\n')
+			if err != nil {
+				logger.Warn("Err in rand ", err)
+			}
+			logger.Info("Rand ", s)
 		}
 	}()
 
@@ -305,10 +313,11 @@ func doSend(ctx context.Context, id peer.ID) {
 	}
 }
 
-func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
+func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 	buff := make([]byte, 512)
 	t := time.NewTicker(1 * time.Second)
 	count := 0
+	series := 0
 
 	go func() {
 		for {
@@ -317,6 +326,10 @@ func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
 				logger.Warn("err", err)
 			} else {
 				count += n
+				_, err = rw.WriteString(fmt.Sprintf("%d", series))
+				if err != nil {
+					logger.Warn("err", err)
+				}
 			}
 		}
 	}()
@@ -337,9 +350,9 @@ func doReceive(ctx context.Context, id peer.ID) {
 
 	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
-		rw := bufio.NewReader(s)
+		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 		log.Println("Reading stream")
-		err := decode(s, rw, logger)
+		err := decode(rw, logger)
 		logger.Info("err", err)
 	})
 	logger.Info("Listening")
