@@ -370,7 +370,7 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 
 }
 
-func doReceive(ctx context.Context, id peer.ID) {
+func doReceive(ctx context.Context) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
@@ -379,7 +379,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 		log.Println("Reading stream")
 		err := decode(rw, logger)
-		logger.Info("err", err)
+		logger.Info("Stream: ", err)
 	})
 	logger.Info("Listening")
 

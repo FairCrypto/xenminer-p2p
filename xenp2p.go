@@ -42,18 +42,6 @@ type Block struct {
 	BlockHash   string `json:"block_hash"`
 }
 
-/*
-	EXAMPLE:
-	{
-		"account": "0x449e81babda663f233cd197b1a0174e6779f7f8e",
-		"block_id": 2740231, // OR "xuni_id": 2740231,
-		"date": "2023-10-11 16:16:12",
-		"hash_to_verify": "$argon2id$v=19$m=65400,t=1,p=1$WEVOMTAwODIwMjJYRU4$7GIkohf/jGOqPJt08s0FjWk9VqYpjBXEN11HJsBKCbsnUCWUy4vRDXSoZ9CkkDEToYNLJwj4XjHvXYX3VNPnyQ",
-		"id": 5006101,
-		"key": "7ad9bf0adbfd6e0ff40463eefaaef9544a15639d79e55ee48fd6c6260979ca9b"
-	}
-*/
-
 type HashRecord struct {
 	Id           uint   `json:"id"`
 	CreatedAt    string `json:"created_at"`
@@ -114,8 +102,6 @@ type NetworkState struct {
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 const yieldTime = 100 * time.Millisecond
-
-// const shortYieldTime = 10 * time.Millisecond
 
 func max(a, b uint) uint {
 	if a <= b {
@@ -740,10 +726,8 @@ func main() {
 	logLevel := flag.String("log", "warn", "set log level")
 
 	source := flag.String("test-source", "", "send data to sink")
-	sink := flag.String("test-sink", "", "receive data from source")
+	sink := flag.Bool("test-sink", false, "receive data from source")
 	flag.Parse()
-
-	// log.Println(isSource, isSink)
 
 	isSupportedRole := func(item string, index int) bool {
 		// TODO: refactor out to a global var
@@ -834,7 +818,7 @@ func main() {
 	peers := lo.Map(destinations, toAddrInfo)
 
 	var disc *drouting.RoutingDiscovery
-	if *client || *source != "" || *sink != "" {
+	if *client || *source != "" || *sink {
 		setupConnections(ctx, destinations)
 	}
 
@@ -846,12 +830,8 @@ func main() {
 		doSend(ctx, id)
 		select {}
 
-	} else if *sink != "" {
-		id, err := peer.Decode(*sink)
-		if err != nil {
-			log.Fatal("Error ", err)
-		}
-		doReceive(ctx, id)
+	} else if *sink {
+		doReceive(ctx)
 		// select {}
 
 	} else {
