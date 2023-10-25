@@ -293,9 +293,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	}
 }
 
-func decode(s network.Stream) {
-	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-	log.Println("Reading stream")
+func decode(rw bufio.ReadWriter) {
 	for {
 		bytes, err := rw.ReadBytes(0)
 		if err != nil {
@@ -313,7 +311,9 @@ func doReceive(ctx context.Context, id peer.ID) {
 
 	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
-		go decode(s)
+		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
+		log.Println("Reading stream")
+		go decode(*rw)
 	})
 	logger.Info("Listening")
 
