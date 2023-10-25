@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
 	"os"
+	"time"
 )
 
 func initNode(path0 string, logger log0.EventLogger) {
@@ -260,7 +261,7 @@ func doSend(ctx context.Context, id peer.ID) {
 		logger.Warn("Err in conn ", err)
 	}
 
-	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+	rw := bufio.NewWriter(bufio.NewWriter(conn))
 
 	logger.Info("Connection ", conn.Stat())
 
@@ -276,6 +277,7 @@ func doSend(ctx context.Context, id peer.ID) {
 			}
 			logger.Info("Rand ", buf)
 			c <- buf
+			time.Sleep(time.Second)
 		}
 	}()
 
@@ -287,19 +289,20 @@ func doSend(ctx context.Context, id peer.ID) {
 		logger.Infof("Written %d bytes", n)
 		if err != nil {
 			logger.Warn("Error: ", err)
-		} else {
-			fmt.Print(".")
 		}
+
+	case <-ctx.Done():
+		logger.Info("DONE")
 	}
 }
 
-func decode(rw bufio.Reader) {
+func decode(rw bufio.Reader, logger log0.EventLogger) {
 	for {
 		bytes, err := rw.ReadBytes(0)
 		if err != nil {
-			log.Fatal("Err ", err)
+			logger.Warn("!!! ", err)
 		}
-		log.Printf("read: %d", bytes)
+		logger.Info("read: %d", bytes)
 	}
 }
 
@@ -311,7 +314,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReader(bufio.NewReader(s))
 		log.Println("Reading stream")
-		go decode(*rw)
+		go decode(*rw, logger)
 	})
 	logger.Info("Listening")
 
