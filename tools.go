@@ -296,7 +296,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	}
 }
 
-func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) {
+func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
 	buff := make([]byte, 16)
 
 	for {
@@ -304,8 +304,10 @@ func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) {
 		if err != nil {
 			logger.Warn("!!! ", err)
 			_ = s.Close()
+			return err
+		} else {
+			logger.Infof("read (%d): %d", n, buff)
 		}
-		logger.Infof("read (%d): %d", n, buff)
 	}
 }
 
@@ -317,7 +319,8 @@ func doReceive(ctx context.Context, id peer.ID) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReader(s)
 		log.Println("Reading stream")
-		go decode(s, rw, logger)
+		err := decode(s, rw, logger)
+		logger.Info("err", err)
 	})
 	logger.Info("Listening")
 
