@@ -307,7 +307,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 			log.Println(err)
 			// s.Reset()
 		} else {
-			err = s.Close()
+			// err = s.Close()
 		}
 	})
 	<-ctx.Done()
