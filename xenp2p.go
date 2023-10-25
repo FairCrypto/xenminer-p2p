@@ -843,14 +843,14 @@ func main() {
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
-		doSend(ctx, id)
+		go doSend(ctx, id)
 
 	} else if *sink != "" {
 		id, err := peer.Decode(*sink)
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
-		doReceive(ctx, id)
+		go doReceive(ctx, id)
 
 	} else {
 

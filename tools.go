@@ -306,12 +306,11 @@ func decode(s network.Stream) {
 }
 
 func doReceive(ctx context.Context, id peer.ID) {
-	log.Println("receiving")
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
-		log.Println("listener received new stream")
+		logger.Info("listener received new stream", s.Stat())
 		go decode(s)
 	})
 	logger.Info("Listening")
