@@ -255,7 +255,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	c := make(chan []byte)
 	buf := make([]byte, 16)
 	// then we can call rand.Read.
-	conn, err := h.NewStream(context.Background(), id, "/aaa")
+	conn, err := h.NewStream(context.Background(), id, "/aaa/0.0.1")
 	if err != nil {
 		logger.Warn("Err in conn ", err)
 	}
@@ -312,7 +312,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	h.SetStreamHandler("/aaa", func(s network.Stream) {
+	h.SetStreamHandler("/aaa/0.0.1", func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReader(s)
 		log.Println("Reading stream")
