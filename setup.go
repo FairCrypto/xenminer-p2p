@@ -17,8 +17,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
 	"log"
@@ -225,8 +223,10 @@ func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 	h, err := libp2p.New(
 		libp2p.ListenAddrs(addr),
 		libp2p.Identity(privKey),
-		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Transport(ws.New),
+		libp2p.DefaultMuxers,
+		libp2p.DefaultTransports,
+		// libp2p.Transport(tcp.NewTCPTransport),
+		// libp2p.Transport(ws.New),
 		// libp2p.Security(noise.ID, noise.New), // redundant
 	)
 	if err != nil {
