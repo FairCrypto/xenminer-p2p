@@ -844,6 +844,7 @@ func main() {
 			log.Fatal("Error ", err)
 		}
 		go doSend(ctx, id)
+		select {}
 
 	} else if *sink != "" {
 		id, err := peer.Decode(*sink)
@@ -851,6 +852,7 @@ func main() {
 			log.Fatal("Error ", err)
 		}
 		go doReceive(ctx, id)
+		select {}
 
 	} else {
 
