@@ -296,7 +296,7 @@ func decode(s network.Stream) {
 		if err != nil {
 			log.Fatal("Err ", err)
 		}
-		log.Printf("read: %s", bytes)
+		log.Printf("read: %d", bytes)
 	}
 }
 
