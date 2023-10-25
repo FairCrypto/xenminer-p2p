@@ -274,7 +274,9 @@ func doSend(ctx context.Context, id peer.ID) {
 
 	select {
 	case bytes := <-c:
-		_, err = conn.Write(bytes)
+		logger.Info(bytes)
+		_, err = conn.Write(append(bytes, 0))
+		// _, err = conn.Write([]byte())
 		if err != nil {
 			logger.Fatal("Error: ", err)
 		} else {
@@ -285,13 +287,12 @@ func doSend(ctx context.Context, id peer.ID) {
 
 func decode(s network.Stream) error {
 	buf := bufio.NewReader(s)
-	str, err := buf.ReadString('\n')
+	bytes, err := buf.ReadBytes('\n')
 	if err != nil {
 		return err
 	}
 
-	log.Printf("read: %s", str)
-	_, err = s.Write([]byte(str))
+	log.Printf("read: %s", bytes)
 	return err
 }
 
