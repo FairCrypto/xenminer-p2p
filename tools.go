@@ -280,8 +280,8 @@ func doSend(ctx context.Context, id peer.ID) {
 	select {
 	case bytes := <-c:
 		logger.Info(bytes)
-		n, err := rw.Write(bytes)
-		err = rw.Flush()
+		n, err := rw.Write(append(bytes, 0))
+		// err = rw.Flush()
 		logger.Infof("Written %d bytes", n)
 		if err != nil {
 			logger.Warn("Error: ", err)
@@ -300,8 +300,8 @@ func decode(s network.Stream) {
 			log.Fatal("Err ", err)
 		}
 		log.Printf("read: %d", bytes)
-		n, err := rw.Write(append(make([]byte, 1), '\n'))
-		log.Printf("written: %d", n)
+		// n, err := rw.Write(append(make([]byte, 1), '\n'))
+		// log.Printf("written: %d", n)
 	}
 }
 
