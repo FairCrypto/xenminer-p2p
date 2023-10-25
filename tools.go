@@ -254,7 +254,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	c := make(chan []byte)
-	buf := make([]byte, 16)
+	buf := make([]byte, 512)
 	// then we can call rand.Read.
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	if err != nil {
@@ -281,23 +281,26 @@ func doSend(ctx context.Context, id peer.ID) {
 		}
 	}()
 
-	select {
-	case bytes := <-c:
-		logger.Info(bytes)
-		n, err := rw.Write(append(bytes))
-		err = rw.Flush()
-		logger.Infof("Written %d bytes", n)
-		if err != nil {
-			logger.Warn("Error: ", err)
-		}
+	for {
+		select {
+		case bytes := <-c:
+			logger.Info(bytes)
+			n, err := rw.Write(bytes)
+			err = rw.Flush()
+			logger.Infof("Written %d bytes", n)
+			if err != nil {
+				logger.Warn("Error: ", err)
+				return
+			}
 
-	case <-ctx.Done():
-		logger.Info("DONE")
+		case <-ctx.Done():
+			logger.Info("DONE")
+		}
 	}
 }
 
 func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
-	buff := make([]byte, 16)
+	buff := make([]byte, 512)
 
 	for {
 		n, err := rw.Read(buff)

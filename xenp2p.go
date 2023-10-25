@@ -843,7 +843,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
-		go doSend(ctx, id)
+		doSend(ctx, id)
 		select {}
 
 	} else if *sink != "" {
