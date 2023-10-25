@@ -842,7 +842,10 @@ func main() {
 		// id, _ := peer.IDFromBytes([]byte(*source))
 		doSend(ctx, peers[0].ID)
 	} else if *sink != "" {
-		id, _ := peer.IDFromBytes([]byte(*sink))
+		id, err := peer.IDFromBytes([]byte(*sink))
+		if err != nil {
+			log.Fatal("Error ", err)
+		}
 		doReceive(ctx, id)
 	} else {
 
