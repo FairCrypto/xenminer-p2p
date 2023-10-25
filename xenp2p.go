@@ -734,16 +734,19 @@ func main() {
 	resetBlockchain := flag.Bool("reset-blockchain", false, "reset node's blockchain DB")
 	resetHashes := flag.Bool("reset-hashes", false, "reset node's raw hashes DB")
 	syncBlocksToHashes := flag.Bool("hashes", false, "sync raw hashes and exit")
-	// backfill := flag.Bool("backfill", false, "back-fill raw hashes in the background")
 	configPath := flag.String("config", ".node", "path to config file")
 	readOnlyDB := flag.Bool("readonly", false, "open DB as read-only")
 	client := flag.Bool("client", false, "start in client-only mode")
 	logLevel := flag.String("log", "warn", "set log level")
+
+	source := flag.String("test-source", "", "send data to sink")
+	sink := flag.String("test-sink", "", "receive data from source")
 	flag.Parse()
+
+	// log.Println(isSource, isSink)
 
 	isSupportedRole := func(item string, index int) bool {
 		// TODO: refactor out to a global var
-		supportedRoles := []string{"supernode", "relay", "miner", "validator", "rpc", "bootstrap"}
 		return slices.Contains(supportedRoles, item)
 	}
 	roles := lo.Filter[string](strings.Split(*roleSet, ","), isSupportedRole)
@@ -831,101 +834,110 @@ func main() {
 	peers := lo.Map(destinations, toAddrInfo)
 
 	var disc *drouting.RoutingDiscovery
-	if *client {
+	if *client || *source != "" || *sink != "" {
 		setupConnections(ctx, destinations)
 	}
-	//} else {
-	var dhtOptions []dht.Option
-	if len(destinations) > 0 {
-		dhtOptions = append(dhtOptions, dht.BootstrapPeers(peers...))
-	}
-	if *client {
-		// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
-		dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
-	}
 
-	kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
-	if err != nil {
-		panic(err)
-	}
-	ctx = context.WithValue(ctx, "dht", kademliaDHT)
-	defer func(kademliaDHT *dht.IpfsDHT) {
-		_ = kademliaDHT.Close()
-	}(kademliaDHT)
-
-	disc = setupDiscovery(ctx, destinations)
-	// Bootstrap the DHT. In the default configuration, this spawns a Background
-	// thread that will refresh the peer table every five minutes.
-	logger.Info("Bootstrapping the DHT")
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
-	}
-	//}
-
-	// setup pubsub protocol (either floodsub or gossip)
-	var pubsubOptions []pubsub.Option
-	pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
-	if !*client {
-		pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
-	}
-	// ps, err := pubsub.NewFloodSub(ctx, h, pubsubOptions...)
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsubOptions...)
-	ctx = context.WithValue(ctx, "pubsub", ps)
-	if err != nil {
-		logger.Error("Error starting pubsub protocol", err)
-		panic(err)
-	}
-
-	logger.Info("Started: ", peerId)
-
-	// subscribe to essential topics
-	topics, subs := subscribeToTopics(ps, logger)
-	ctx = context.WithValue(ctx, "topics", topics)
-	ctx = context.WithValue(ctx, "subs", subs)
-
-	// create a group of async processes
-	var wg sync.WaitGroup
-
-	// spawn message processing by topics
-	wg.Add(1)
-	go processBlockHeight(ctx)
-
-	wg.Add(1)
-	go processData(ctx)
-
-	wg.Add(1)
-	go processGet(ctx)
-
-	wg.Add(1)
-	go processGetRaw(ctx)
-
-	wg.Add(1)
-	go processNewHash(ctx)
-
-	wg.Add(1)
-	go broadcastBlockHeight(ctx)
-
-	if peerId == masterPeerId {
-		wg.Add(1)
-		go broadcastLastHash(ctx)
+	if *source != "" {
+		// id, _ := peer.IDFromBytes([]byte(*source))
+		doSend(ctx, peers[0].ID)
+	} else if *sink != "" {
+		id, _ := peer.IDFromBytes([]byte(*sink))
+		doReceive(ctx, id)
 	} else {
-		wg.Add(1)
-		go requestMissingHashesAndXunis(ctx)
-	}
 
-	if *client {
-		// check / renew connections periodically
-		wg.Add(1)
-		go checkConnections(ctx, destinations)
-	}
-
-	/*
+		var dhtOptions []dht.Option
 		if len(destinations) > 0 {
-			wg.Add(1)
-			go discoverPeers(ctx, disc, destinations)
+			dhtOptions = append(dhtOptions, dht.BootstrapPeers(peers...))
 		}
-	*/
+		if *client {
+			// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
+			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
+		}
 
-	// wait until interrupted
-	wg.Wait()
+		kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
+		if err != nil {
+			panic(err)
+		}
+		ctx = context.WithValue(ctx, "dht", kademliaDHT)
+		defer func(kademliaDHT *dht.IpfsDHT) {
+			_ = kademliaDHT.Close()
+		}(kademliaDHT)
+
+		disc = setupDiscovery(ctx, destinations)
+		// Bootstrap the DHT. In the default configuration, this spawns a Background
+		// thread that will refresh the peer table every five minutes.
+		logger.Info("Bootstrapping the DHT")
+		if err = kademliaDHT.Bootstrap(ctx); err != nil {
+			panic(err)
+		}
+		//}
+
+		// setup pubsub protocol (either floodsub or gossip)
+		var pubsubOptions []pubsub.Option
+		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+		if !*client {
+			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
+		}
+		// ps, err := pubsub.NewFloodSub(ctx, h, pubsubOptions...)
+		ps, err := pubsub.NewGossipSub(ctx, h, pubsubOptions...)
+		ctx = context.WithValue(ctx, "pubsub", ps)
+		if err != nil {
+			logger.Error("Error starting pubsub protocol", err)
+			panic(err)
+		}
+
+		logger.Info("Started: ", peerId)
+
+		// subscribe to essential topics
+		topics, subs := subscribeToTopics(ps, logger)
+		ctx = context.WithValue(ctx, "topics", topics)
+		ctx = context.WithValue(ctx, "subs", subs)
+
+		// create a group of async processes
+		var wg sync.WaitGroup
+
+		// spawn message processing by topics
+		wg.Add(1)
+		go processBlockHeight(ctx)
+
+		wg.Add(1)
+		go processData(ctx)
+
+		wg.Add(1)
+		go processGet(ctx)
+
+		wg.Add(1)
+		go processGetRaw(ctx)
+
+		wg.Add(1)
+		go processNewHash(ctx)
+
+		wg.Add(1)
+		go broadcastBlockHeight(ctx)
+
+		if peerId == masterPeerId {
+			wg.Add(1)
+			go broadcastLastHash(ctx)
+		} else {
+			wg.Add(1)
+			go requestMissingHashesAndXunis(ctx)
+		}
+
+		if *client {
+			// check / renew connections periodically
+			wg.Add(1)
+			go checkConnections(ctx, destinations)
+		}
+
+		/*
+			if len(destinations) > 0 {
+				wg.Add(1)
+				go discoverPeers(ctx, disc, destinations)
+			}
+		*/
+
+		// wait until interrupted
+		wg.Wait()
+	}
 }

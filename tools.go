@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -10,7 +11,9 @@ import (
 	log0 "github.com/ipfs/go-log/v2"
 	"github.com/joho/godotenv"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
 	"os"
 )
@@ -241,4 +244,60 @@ func syncHashes(path0 string, logger log0.EventLogger) {
 		log.Fatal("Error closing DBH: ", err)
 	}
 	logger.Info("Done with DBH")
+}
+
+func doSend(ctx context.Context, id peer.ID) {
+	h := ctx.Value("host").(host.Host)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	c := make(chan []byte)
+
+	buf := make([]byte, 128)
+	// then we can call rand.Read.
+
+	go func() {
+		for {
+			_, err := rand.Read(buf)
+			if err != nil {
+				logger.Warn("Err in rand ", err)
+			}
+		}
+	}()
+
+	conn, err := h.NewStream(ctx, id, protocol.TestingID)
+	if err != nil {
+		logger.Fatal("Error: ", err)
+	}
+
+	select {
+	case bytes := <-c:
+		_, err = conn.Write(bytes)
+		if err != nil {
+			logger.Fatal("Error: ", err)
+		} else {
+			fmt.Print(".")
+		}
+	}
+}
+
+func doReceive(ctx context.Context, id peer.ID) {
+	log.Println("receiving")
+	h := ctx.Value("host").(host.Host)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	conn, err := h.NewStream(ctx, id, protocol.TestingID)
+	if err != nil {
+		logger.Fatal("Error: ", err)
+	}
+
+	buf := make([]byte, 128)
+
+	for {
+		_, err = conn.Read(buf)
+		if err != nil {
+			logger.Fatal("Error: ", err)
+		} else {
+			fmt.Print(".")
+		}
+	}
 }
