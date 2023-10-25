@@ -852,7 +852,7 @@ func main() {
 			log.Fatal("Error ", err)
 		}
 		doReceive(ctx, id)
-		select {}
+		// select {}
 
 	} else {
 

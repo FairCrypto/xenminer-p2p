@@ -321,5 +321,5 @@ func doReceive(ctx context.Context, id peer.ID) {
 	})
 	logger.Info("Listening")
 
-	// <-ctx.Done()
+	<-ctx.Done()
 }
