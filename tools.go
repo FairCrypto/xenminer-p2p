@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"log"
 	"os"
 )
@@ -267,7 +266,8 @@ func doSend(ctx context.Context, id peer.ID) {
 		}
 	}()
 
-	conn, err := h.NewStream(ctx, id, protocol.TestingID)
+	conn, err := h.NewStream(ctx, id, "aaa")
+	logger.Info("Connection ", conn.Stat())
 	if err != nil {
 		logger.Fatal("Error: ", err)
 	}
@@ -275,8 +275,8 @@ func doSend(ctx context.Context, id peer.ID) {
 	select {
 	case bytes := <-c:
 		logger.Info(bytes)
-		_, err = conn.Write(append(bytes, 0))
-		// _, err = conn.Write([]byte())
+		n, err := conn.Write(append(bytes))
+		logger.Infof("Written %d bytes", n)
 		if err != nil {
 			logger.Fatal("Error: ", err)
 		} else {
@@ -301,7 +301,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
+	h.SetStreamHandler("aaa", func(s network.Stream) {
 		log.Println("listener received new stream")
 		if err := decode(s); err != nil {
 			log.Println("Error in stream ", err)

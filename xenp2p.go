@@ -844,12 +844,14 @@ func main() {
 			log.Fatal("Error ", err)
 		}
 		doSend(ctx, id)
+
 	} else if *sink != "" {
 		id, err := peer.Decode(*sink)
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
 		doReceive(ctx, id)
+
 	} else {
 
 		var dhtOptions []dht.Option
