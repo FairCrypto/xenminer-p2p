@@ -287,13 +287,13 @@ func doSend(ctx context.Context, id peer.ID) {
 
 func decode(s network.Stream) error {
 	buf := bufio.NewReader(s)
-	for {
-		bytes, err := buf.ReadBytes('\n')
-		if err != nil {
-			return err
-		}
-		log.Printf("read: %s", bytes)
+
+	bytes, err := buf.ReadBytes('\n')
+	if err != nil {
+		return err
 	}
+	log.Printf("read: %s", bytes)
+	return nil
 }
 
 func doReceive(ctx context.Context, id peer.ID) {
