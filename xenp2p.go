@@ -851,7 +851,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error ", err)
 		}
-		go doReceive(ctx, id)
+		doReceive(ctx, id)
 		select {}
 
 	} else {
