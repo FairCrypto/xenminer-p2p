@@ -261,7 +261,7 @@ func doSend(ctx context.Context, id peer.ID) {
 		logger.Warn("Err in conn ", err)
 	}
 
-	rw := bufio.NewWriter(bufio.NewWriter(conn))
+	rw := bufio.NewWriter(conn)
 
 	logger.Info("Connection ", conn.Stat())
 
@@ -312,7 +312,7 @@ func doReceive(ctx context.Context, id peer.ID) {
 
 	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
-		rw := bufio.NewReader(bufio.NewReader(s))
+		rw := bufio.NewReader(s)
 		log.Println("Reading stream")
 		go decode(*rw, logger)
 	})
