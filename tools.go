@@ -290,11 +290,11 @@ func doSend(ctx context.Context, id peer.ID) {
 
 func decode(s network.Stream) {
 	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-
+	log.Println("Reading stream")
 	for {
 		bytes, err := rw.ReadBytes('\n')
 		if err != nil {
-			log.Println("Err ", err)
+			log.Fatal("Err ", err)
 		}
 		log.Printf("read: %s", bytes)
 	}
