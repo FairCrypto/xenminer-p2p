@@ -255,7 +255,9 @@ func doSend(ctx context.Context, id peer.ID) {
 
 	c := make(chan []byte)
 	buf := make([]byte, 512)
-	// then we can call rand.Read.
+	t := time.NewTicker(1 * time.Second)
+	count := 0
+
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	if err != nil {
 		logger.Warn("Err in conn ", err)
@@ -275,19 +277,24 @@ func doSend(ctx context.Context, id peer.ID) {
 			if err != nil {
 				logger.Warn("Err in rand ", err)
 			}
-			logger.Info("Rand ", buf)
+			// logger.Info("Rand ", buf)
 			c <- buf
-			time.Sleep(time.Second)
+			// time.Sleep(time.Second)
 		}
 	}()
 
 	for {
 		select {
+		case <-t.C:
+			logger.Infof("%d bytes/s", count)
+			count = 0
+
 		case bytes := <-c:
 			logger.Info(bytes)
 			n, err := rw.Write(bytes)
+			count += n
 			err = rw.Flush()
-			logger.Infof("Written %d bytes", n)
+			// logger.Infof("Written %d bytes", n)
 			if err != nil {
 				logger.Warn("Error: ", err)
 				return
@@ -301,15 +308,17 @@ func doSend(ctx context.Context, id peer.ID) {
 
 func decode(s network.Stream, rw *bufio.Reader, logger log0.EventLogger) error {
 	buff := make([]byte, 512)
+	// t := time.NewTicker(1 * time.Second)
+	// count := 0
 
 	for {
-		n, err := rw.Read(buff)
+		_, err := rw.Read(buff)
 		if err != nil {
 			logger.Warn("!!! ", err)
 			_ = s.Close()
 			return err
 		} else {
-			logger.Infof("read (%d): %d", n, buff)
+			fmt.Print()
 		}
 	}
 }
