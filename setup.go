@@ -87,6 +87,12 @@ func prepareBootstrapAddresses(path string, logger log0.EventLogger) []string {
 		destinations = append(
 			destinations,
 			fmt.Sprintf(
+				"/ip4/%s/tcp/%s/p2p/%s",
+				bootstrapHosts[i],
+				bootstrapPorts[i],
+				peerId,
+			),
+			fmt.Sprintf(
 				"/ip4/%s/tcp/%s/ws/p2p/%s",
 				bootstrapHosts[i],
 				bootstrapPorts[i],

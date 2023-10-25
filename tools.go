@@ -260,6 +260,9 @@ func doSend(ctx context.Context, id peer.ID) {
 
 	logger.Info("Connection ", conn.Stat())
 	if err != nil {
+		logger.Warn("Err in conn ", err)
+	}
+	if err != nil {
 		logger.Fatal("Error: ", err)
 	}
 
