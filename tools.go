@@ -258,8 +258,11 @@ func doSend(ctx context.Context, id peer.ID) {
 	buf := make([]byte, 512)
 	t := time.NewTicker(1 * time.Second)
 	count := 0
-	series := 0
-	times := map[int]int{}
+	// series := 0
+	// times := map[int]int{}
+	// mutex := sync.RWMutex{}
+	start := 0
+	delta := 0
 
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	if err != nil {
@@ -290,22 +293,33 @@ func doSend(ctx context.Context, id peer.ID) {
 			if err != nil {
 				logger.Warn("Err in rand ", err)
 			}
-			i, err := strconv.Atoi(s)
-			logger.Infof("Read: %d, delta: %d", i, int(time.Now().UnixMilli())-times[i])
+			_, err = strconv.Atoi(s)
+			if start != 0 {
+				delta = int(time.Now().UnixMilli()) - start
+				start = 0
+			}
+			// mutex.RLock()
+			// logger.Infof("Read: %d, delta: %d", i, int(time.Now().UnixMilli())-times[i])
+			// mutex.RUnlock()
 		}
 	}()
 
 	for {
 		select {
 		case <-t.C:
-			logger.Infof("%d bytes/s", count)
+			logger.Infof("%d bytes/s, delta: %d", count, delta)
 			count = 0
 
 		case bytes := <-c:
 			n, err := rw.Write(bytes)
 			count += n
-			times[series] = int(time.Now().UnixMilli())
-			series++
+			// mutex.Lock()
+			// times[series] = int(time.Now().UnixMilli())
+			// mutex.Unlock()
+			// series += 1
+			if start == 0 {
+				start = int(time.Now().UnixMilli())
+			}
 			if err != nil {
 				logger.Warn("Error: ", err)
 				return
@@ -320,6 +334,8 @@ func doSend(ctx context.Context, id peer.ID) {
 func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 	buff := make([]byte, 512)
 	t := time.NewTicker(1 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
 	count := 0
 	series := 0
 
@@ -345,6 +361,9 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 		case <-t.C:
 			logger.Infof("Rec %d byte/s", count)
 			count = 0
+		case <-quit:
+			t.Stop()
+			return errors.New("stopped")
 		}
 	}
 
