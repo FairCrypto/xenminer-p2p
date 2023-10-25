@@ -297,13 +297,14 @@ func doSend(ctx context.Context, id peer.ID) {
 }
 
 func decode(rw bufio.Reader, logger log0.EventLogger) {
-	for {
-		bytes, err := rw.ReadBytes(0)
-		if err != nil {
-			logger.Warn("!!! ", err)
-		}
-		logger.Info("read: %d", bytes)
+
+	bytes, err := rw.ReadBytes(0)
+	if err != nil {
+		logger.Warn("!!! ", err)
 	}
+	logger.Info("read: %d", bytes)
+
+	select {}
 }
 
 func doReceive(ctx context.Context, id peer.ID) {
