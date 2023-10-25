@@ -253,7 +253,7 @@ func doSend(ctx context.Context, id peer.ID) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	c := make(chan []byte)
-	buf := make([]byte, 128)
+	buf := make([]byte, 16)
 	// then we can call rand.Read.
 	conn, err := h.NewStream(context.Background(), id, protocol.TestingID)
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
