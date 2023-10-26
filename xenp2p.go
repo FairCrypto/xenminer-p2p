@@ -320,7 +320,7 @@ func processData(ctx context.Context) {
 			if peerId != masterPeerId && blockIsValid {
 				err = insertBlock(db, &block)
 				if err != nil {
-					logger.Warn("Error adding block to DB: ", err)
+					logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
 				}
 			}
 		}
