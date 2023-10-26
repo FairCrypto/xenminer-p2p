@@ -189,6 +189,7 @@ func processGet(ctx context.Context) {
 			}
 		}
 		bytes, err := json.Marshal(blocks)
+		logger.Debug("SEND block(s):", blocks)
 		err = topics.data.Publish(ctx, bytes)
 		if err != nil {
 			logger.Warn("Error publishing data message: ", err)
