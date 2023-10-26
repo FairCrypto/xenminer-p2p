@@ -137,7 +137,7 @@ func processBlockHeight(ctx context.Context) {
 		localHeight := getCurrentHeight(db)
 		if blockchainHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF", localHeight, "<", blockchainHeight)
-			delta := uint(math.Min(float64(blockchainHeight-localHeight), 5))
+			delta := uint(math.Min(float64(blockchainHeight-localHeight), 100))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -180,23 +180,15 @@ func processGet(ctx context.Context) {
 			logger.Warn("Error converting want message: ", err)
 		}
 		logger.Debug("WANT block_id(s):", blockIds)
+		var blocks []Block
 		for _, blockId := range blockIds {
-			block, err := getBlock(db, blockId)
+			block, _ := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
-			if err == nil {
-				blocks := []Block{*block}
-				bytes, err := json.Marshal(blocks)
-				if err != nil {
-					logger.Warn("Error converting block to data: ", err)
-				}
-				err = topics.data.Publish(ctx, bytes)
-				if err != nil {
-					logger.Warn("Error publishing data message: ", err)
-				}
-				// logger.Info("SENT", blockId)
-			} else {
-				logger.Debug("!BLOCK", blockId)
-				err = nil
+			blocks = append(blocks, *block)
+			bytes, err := json.Marshal(blocks)
+			err = topics.data.Publish(ctx, bytes)
+			if err != nil {
+				logger.Warn("Error publishing data message: ", err)
 			}
 		}
 		runtime.Gosched()
@@ -324,8 +316,8 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
-		time.Sleep(yieldTime)
-		// runtime.Gosched()
+		// time.Sleep(yieldTime)
+		runtime.Gosched()
 	}
 }
 
