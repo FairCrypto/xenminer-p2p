@@ -419,7 +419,7 @@ func broadcastBlockHeight(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	db := ctx.Value("db").(*sql.DB)
 
-	t := time.NewTicker(20 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 
@@ -651,7 +651,7 @@ func requestMissingHashesAndXunis(ctx context.Context) {
 	dbh := ctx.Value("dbh").(*sql.DB)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	t := time.NewTicker(1 * time.Second)
+	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 
@@ -904,8 +904,8 @@ func main() {
 			wg.Add(1)
 			go broadcastLastHash(ctx)
 		} else {
-			wg.Add(1)
-			go requestMissingHashesAndXunis(ctx)
+			// wg.Add(1)
+			// go requestMissingHashesAndXunis(ctx)
 		}
 
 		if *client {
