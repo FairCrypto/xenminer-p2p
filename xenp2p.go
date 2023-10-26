@@ -180,7 +180,7 @@ func processGet(ctx context.Context) {
 			logger.Warn("Error converting want message: ", err)
 		}
 		logger.Debug("WANT block_id(s):", blockIds)
-		var blocks []Block
+		var blocks Blocks
 		for _, blockId := range blockIds {
 			block, err := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
@@ -188,7 +188,7 @@ func processGet(ctx context.Context) {
 				blocks = append(blocks, *block)
 			}
 		}
-		bytes, err := json.Marshal(blocks)
+		bytes, err := json.Marshal(&blocks)
 		logger.Debug("SEND block(s):", len(blocks))
 		err = topics.data.Publish(ctx, bytes)
 		if err != nil {
