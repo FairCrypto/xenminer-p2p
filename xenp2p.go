@@ -182,9 +182,9 @@ func processGet(ctx context.Context) {
 		logger.Debug("WANT block_id(s):", blockIds)
 		var blocks []Block
 		for _, blockId := range blockIds {
-			block, _ := getBlock(db, blockId)
+			block, err := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
-			if block != nil {
+			if err == nil {
 				blocks = append(blocks, *block)
 			}
 		}
