@@ -293,6 +293,7 @@ func processData(ctx context.Context) {
 		}
 		var blocks Blocks
 		err = json.Unmarshal(msg.Data, &blocks)
+		logger.Debug("RECV: ", len(blocks))
 		if err != nil {
 			logger.Warn("Error converting data message: ", err)
 		}
