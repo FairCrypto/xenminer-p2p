@@ -137,7 +137,7 @@ func processBlockHeight(ctx context.Context) {
 		localHeight := getCurrentHeight(db)
 		if blockchainHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF", localHeight, "<", blockchainHeight)
-			delta := uint(math.Min(float64(blockchainHeight-localHeight), 10))
+			delta := uint(math.Min(float64(blockchainHeight-localHeight), 20))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
