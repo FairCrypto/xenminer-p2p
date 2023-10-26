@@ -106,12 +106,7 @@ const rendezvousString = "/xenblocks/0.1.0"
 
 var maxBlockHeight uint = 0
 
-func max(a, b uint) uint {
-	if a <= b {
-		return a
-	}
-	return b
-}
+var wantedBlockIds = map[uint]bool{}
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
@@ -145,6 +140,7 @@ func processBlockHeight(ctx context.Context) {
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
+				wantedBlockIds[localHeight+i+1] = true
 			}
 			msgBytes, err := json.Marshal(want)
 			if err != nil {
@@ -305,6 +301,9 @@ func processData(ctx context.Context) {
 			if msg.ReceivedFrom.String() == peerId {
 				logger.Debug("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
 			}
+			if !wantedBlockIds[block.Id] {
+				continue
+			}
 			if block.Id > 1 {
 				prevBlock, err := getPrevBlock(db, &block)
 				if err != nil {
@@ -321,6 +320,8 @@ func processData(ctx context.Context) {
 				err = insertBlock(db, &block)
 				if err != nil {
 					logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
+				} else {
+					delete(wantedBlockIds, block.Id)
 				}
 			}
 		}
