@@ -101,7 +101,10 @@ type NetworkState struct {
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
-const yieldTime = 100 * time.Millisecond
+
+// const yieldTime = 100 * time.Millisecond
+
+var maxBlockHeight uint = 0
 
 func max(a, b uint) uint {
 	if a <= b {
@@ -122,8 +125,6 @@ func processBlockHeight(ctx context.Context) {
 		msg, err := subs.blockHeight.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
 			continue
-		} else {
-			// logger.Info("received msg from ", msg.ReceivedFrom.String())
 		}
 		if err != nil {
 			logger.Warn("Error getting message: ", err)
@@ -135,9 +136,12 @@ func processBlockHeight(ctx context.Context) {
 		}
 
 		localHeight := getCurrentHeight(db)
-		if blockchainHeight > localHeight && peerId != masterPeerId {
-			logger.Info("DIFF", localHeight, "<", blockchainHeight)
-			delta := uint(math.Min(float64(blockchainHeight-localHeight), 20))
+		if blockchainHeight > maxBlockHeight && blockchainHeight > localHeight {
+			maxBlockHeight = blockchainHeight
+		}
+		if maxBlockHeight > localHeight && peerId != masterPeerId {
+			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
+			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 20))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -151,10 +155,10 @@ func processBlockHeight(ctx context.Context) {
 				logger.Warn("Error publishing message: ", err)
 			}
 		}
-		if blockchainHeight == localHeight {
-			logger.Info("IN SYNC", localHeight, "=", blockchainHeight)
+		if maxBlockHeight == localHeight {
+			logger.Info("IN SYNC: ", localHeight, "=", maxBlockHeight)
 		}
-		state.BlockHeight = uint64(max(blockchainHeight, localHeight))
+		state.BlockHeight = uint64(maxBlockHeight)
 		runtime.Gosched()
 	}
 }
