@@ -184,12 +184,14 @@ func processGet(ctx context.Context) {
 		for _, blockId := range blockIds {
 			block, _ := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
-			blocks = append(blocks, *block)
-			bytes, err := json.Marshal(blocks)
-			err = topics.data.Publish(ctx, bytes)
-			if err != nil {
-				logger.Warn("Error publishing data message: ", err)
+			if block != nil {
+				blocks = append(blocks, *block)
 			}
+		}
+		bytes, err := json.Marshal(blocks)
+		err = topics.data.Publish(ctx, bytes)
+		if err != nil {
+			logger.Warn("Error publishing data message: ", err)
 		}
 		runtime.Gosched()
 	}
