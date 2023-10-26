@@ -137,7 +137,7 @@ func processBlockHeight(ctx context.Context) {
 		localHeight := getCurrentHeight(db)
 		if blockchainHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF", localHeight, "<", blockchainHeight)
-			delta := uint(math.Min(float64(blockchainHeight-localHeight), 100))
+			delta := uint(math.Min(float64(blockchainHeight-localHeight), 10))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -188,8 +188,8 @@ func processGet(ctx context.Context) {
 				blocks = append(blocks, *block)
 			}
 		}
-		bytes, err := json.Marshal(&blocks)
 		logger.Debug("SEND block(s):", len(blocks))
+		bytes, err := json.Marshal(&blocks)
 		err = topics.data.Publish(ctx, bytes)
 		if err != nil {
 			logger.Warn("Error publishing data message: ", err)
