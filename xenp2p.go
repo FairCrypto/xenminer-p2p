@@ -885,6 +885,8 @@ func main() {
 		ctx = context.WithValue(ctx, "topics", topics)
 		ctx = context.WithValue(ctx, "subs", subs)
 
+		rpcServer(ctx)
+
 		// create a group of async processes
 		var wg sync.WaitGroup
 
