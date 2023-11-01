@@ -7,13 +7,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	log0 "github.com/ipfs/go-log/v2"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	_ "github.com/mattn/go-sqlite3"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"github.com/samber/lo"
 	"go.uber.org/zap/zapcore"
 	"log"
@@ -106,7 +109,8 @@ const rendezvousString = "/xenblocks/0.1.0"
 
 var maxBlockHeight uint = 0
 
-var wantedBlockIds = map[uint]bool{}
+// var wantedBlockIds = map[uint]bool{}
+var wantedBlockIds = cmap.New[bool]()
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
@@ -140,7 +144,7 @@ func processBlockHeight(ctx context.Context) {
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
-				wantedBlockIds[localHeight+i+1] = true
+				wantedBlockIds.Set(fmt.Sprintf("%d", localHeight+i+1), true)
 			}
 			msgBytes, err := json.Marshal(want)
 			if err != nil {
@@ -301,7 +305,7 @@ func processData(ctx context.Context) {
 			if msg.ReceivedFrom.String() == peerId {
 				logger.Debug("DATA block_id:", block.Id, "merkle_root:", block.MerkleRoot[0:6])
 			}
-			if !wantedBlockIds[block.Id] {
+			if !wantedBlockIds.Has(fmt.Sprintf("%d", block.Id)) {
 				continue
 			}
 			if block.Id > 1 {
@@ -321,7 +325,7 @@ func processData(ctx context.Context) {
 				if err != nil {
 					logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
 				} else {
-					delete(wantedBlockIds, block.Id)
+					wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
 				}
 			}
 		}
@@ -375,7 +379,6 @@ func checkConnections(ctx context.Context, destinations []string) {
 	}
 }
 
-/*
 func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destinations []string) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
@@ -420,7 +423,6 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 	}
 
 }
-*/
 
 func broadcastBlockHeight(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
@@ -866,7 +868,7 @@ func main() {
 
 		// setup pubsub protocol (either floodsub or gossip)
 		var pubsubOptions []pubsub.Option
-		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+		// pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
 			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
@@ -923,12 +925,10 @@ func main() {
 			go checkConnections(ctx, destinations)
 		}
 
-		/*
-			if len(destinations) > 0 {
-				wg.Add(1)
-				go discoverPeers(ctx, disc, destinations)
-			}
-		*/
+		// if len(destinations) > 0 {
+		wg.Add(1)
+		go discoverPeers(ctx, disc, destinations)
+		// }
 
 		// wait until interrupted
 		wg.Wait()

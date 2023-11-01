@@ -24,14 +24,14 @@ func rpcServer(ctx context.Context) {
 		return c.SendString(string(res[:]))
 	})
 
-	app.Get("/pubsub", func(c *fiber.Ctx) error {
-		nodes := ps.ListPeers("data")
+	app.Get("/pubsub/:topic", func(c *fiber.Ctx) error {
+		nodes := ps.ListPeers(c.Params("topic"))
 		res, _ := json.Marshal(nodes)
 		return c.SendString(string(res[:]))
 	})
 
 	app.Get("/dht", func(c *fiber.Ctx) error {
-		nodes, _ := dht.NetworkSize()
+		nodes := dht.RoutingTable().ListPeers()
 		res, _ := json.Marshal(nodes)
 		return c.SendString(string(res[:]))
 	})
