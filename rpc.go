@@ -13,7 +13,7 @@ import (
 func rpcServer(ctx context.Context) {
 	h := ctx.Value("host").(host.Host)
 	ps := ctx.Value("pubsub").(*pubsub.PubSub)
-	dht := ctx.Value("dht").(*dht.IpfsDHT)
+	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	app := fiber.New()
@@ -31,7 +31,7 @@ func rpcServer(ctx context.Context) {
 	})
 
 	app.Get("/dht", func(c *fiber.Ctx) error {
-		nodes := dht.RoutingTable().ListPeers()
+		nodes := dhTable.RoutingTable().GetPeerInfos()
 		res, _ := json.Marshal(nodes)
 		return c.SendString(string(res[:]))
 	})

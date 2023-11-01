@@ -16,7 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
@@ -263,8 +262,8 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
-	dutil.Advertise(ctx, routingDiscovery, rendezvousString)
-	logger.Info("Started announcing")
+	t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
+	logger.Infof("Started announcing %d", t)
 
 	logger.Info("Searching for other peers")
 	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
@@ -278,6 +277,7 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 			continue
 		}
 		logger.Info("Found peer:", p)
+		h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 		err = h.Connect(ctx, p)
 		if err != nil {
 			logger.Warn("Error connecting to peer: ", err)

@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	_ "github.com/mattn/go-sqlite3"
 	cmap "github.com/orcaman/concurrent-map/v2"
@@ -393,7 +394,7 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 		select {
 		case <-t.C:
 			var options []discovery.Option
-			options = append(options, discovery.TTL(10*time.Minute))
+			options = append(options, discovery.TTL(peerstore.PermanentAddrTTL))
 			t, err := disc.Advertise(ctx, rendezvousString, options...)
 			peerChan, err := disc.FindPeers(ctx, rendezvousString)
 			logger.Info("Searching for other peers ", t.String())
@@ -409,6 +410,7 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 					continue
 				}
 				logger.Info("Found peer:", p)
+				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 				err = h.Connect(ctx, p)
 				if err != nil {
 					logger.Warn("Error connecting to peer: ", err)
@@ -860,15 +862,15 @@ func main() {
 		disc = setupDiscovery(ctx, destinations)
 		// Bootstrap the DHT. In the default configuration, this spawns a Background
 		// thread that will refresh the peer table every five minutes.
-		logger.Info("Bootstrapping the DHT")
-		if err = kademliaDHT.Bootstrap(ctx); err != nil {
-			panic(err)
-		}
+		// logger.Info("Bootstrapping the DHT")
+		// if err = kademliaDHT.Bootstrap(ctx); err != nil {
+		// 	panic(err)
+		// }
 		//}
 
 		// setup pubsub protocol (either floodsub or gossip)
 		var pubsubOptions []pubsub.Option
-		// pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
 			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
