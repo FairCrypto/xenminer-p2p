@@ -31,7 +31,8 @@ func rpcServer(ctx context.Context) {
 	})
 
 	app.Get("/dht", func(c *fiber.Ctx) error {
-		nodes := dhTable.RoutingTable().GetPeerInfos()
+		logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
+		nodes := dhTable.RoutingTable().ListPeers()
 		res, _ := json.Marshal(nodes)
 		return c.SendString(string(res[:]))
 	})

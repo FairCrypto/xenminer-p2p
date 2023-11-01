@@ -382,6 +382,7 @@ func checkConnections(ctx context.Context, destinations []string) {
 
 func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destinations []string) {
 	h := ctx.Value("host").(host.Host)
+	dhTable := ctx.Value("dht").(*dht.IpfsDHT)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	t := time.NewTicker(20 * time.Second)
@@ -393,6 +394,7 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 	for {
 		select {
 		case <-t.C:
+			logger.Info(dhTable.RoutingTable().GetPeerInfos())
 			var options []discovery.Option
 			options = append(options, discovery.TTL(peerstore.PermanentAddrTTL))
 			t, err := disc.Advertise(ctx, rendezvousString, options...)
@@ -822,7 +824,7 @@ func main() {
 	destinations := prepareBootstrapAddresses(*configPath, logger)
 	peers := lo.Map(destinations, toAddrInfo)
 
-	var disc *drouting.RoutingDiscovery
+	// var disc *drouting.RoutingDiscovery
 	if *client || *source != "" || *sink {
 		setupConnections(ctx, destinations)
 	}
@@ -859,7 +861,7 @@ func main() {
 			_ = kademliaDHT.Close()
 		}(kademliaDHT)
 
-		disc = setupDiscovery(ctx, destinations)
+		_ = setupDiscovery(ctx, destinations)
 		// Bootstrap the DHT. In the default configuration, this spawns a Background
 		// thread that will refresh the peer table every five minutes.
 		// logger.Info("Bootstrapping the DHT")
@@ -872,7 +874,7 @@ func main() {
 		var pubsubOptions []pubsub.Option
 		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
-			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
+			// pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
 		// ps, err := pubsub.NewFloodSub(ctx, h, pubsubOptions...)
 		ps, err := pubsub.NewGossipSub(ctx, h, pubsubOptions...)
@@ -928,8 +930,8 @@ func main() {
 		}
 
 		// if len(destinations) > 0 {
-		wg.Add(1)
-		go discoverPeers(ctx, disc, destinations)
+		// wg.Add(1)
+		// go discoverPeers(ctx, disc, destinations)
 		// }
 
 		// wait until interrupted

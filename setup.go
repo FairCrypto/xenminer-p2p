@@ -16,8 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
 	"log"
@@ -225,9 +223,16 @@ func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 	h, err := libp2p.New(
 		libp2p.ListenAddrs(addr),
 		libp2p.Identity(privKey),
-		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Transport(ws.New),
+		// libp2p.Transport(tcp.NewTCPTransport),
+		// libp2p.Transport(ws.New),
 		// libp2p.Security(noise.ID, noise.New), // redundant
+		libp2p.DefaultMuxers,
+		libp2p.DefaultSecurity,
+		// libp2p.ConnectionManager(nil),
+		libp2p.DefaultTransports,
+		//we need the disable relay option in order to save the node's bandwidth as much as possible
+		libp2p.DisableRelay(),
+		// libp2p.NATPortMap(),
 	)
 	if err != nil {
 		log.Fatal("Error starting Peer: ", err)
@@ -254,36 +259,49 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 				logger.Warn(err)
 			} else {
 				logger.Info("Connection established with bootstrap node:", peerInfo)
+				r, err := dhTable.RoutingTable().TryAddPeer(peerInfo.ID, true, false)
+				if err != nil {
+					logger.Warn(err)
+				} else if r {
+					logger.Info("Added to RT: ", peerInfo.ID)
+				}
 			}
 		}()
 	}
 	wg.Wait()
+	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
-	t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
-	logger.Infof("Started announcing %d", t)
+	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
+	// t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
+	// logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
+	// logger.Infof("Started announcing %d", t)
 
-	logger.Info("Searching for other peers")
-	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
-	if err != nil {
-		logger.Warn(err)
-	}
-
-	for p := range peerChan {
-		logger.Info("Peer candidate: ", p)
-		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
-			continue
-		}
-		logger.Info("Found peer:", p)
-		h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-		err = h.Connect(ctx, p)
+	/*
+		logger.Info("Searching for other peers")
+		peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
 		if err != nil {
-			logger.Warn("Error connecting to peer: ", err)
+			logger.Warn(err)
 		}
-		logger.Info("Connected to:", p)
-	}
+
+		for p := range peerChan {
+			logger.Info("Peer candidate: ", p)
+			if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
+				continue
+			}
+			logger.Info("Found peer:", p)
+			h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
+			err = h.Connect(ctx, p)
+			if err != nil {
+				logger.Warn("Error connecting to peer: ", err)
+			}
+			logger.Info("Connected to:", p)
+		}
+
+	*/
+	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	return routingDiscovery
 }
 
