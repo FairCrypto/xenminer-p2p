@@ -266,7 +266,7 @@ func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 }
 
 func setupRedis(ctx context.Context) (rdb *redis.Client) {
-	// logger := ctx.Value("logger").(log0.EventLogger)
+	logger := ctx.Value("logger").(log0.EventLogger)
 	rdb = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
@@ -274,7 +274,8 @@ func setupRedis(ctx context.Context) (rdb *redis.Client) {
 	})
 	err := rdb.Set(ctx, "test", "1", 0).Err()
 	if err != nil {
-		panic(err)
+		logger.Warn("Error talking to Redis, probably not present: ", err)
+		return nil
 	}
 
 	val, err := rdb.Get(ctx, "test").Result()
