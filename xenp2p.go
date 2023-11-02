@@ -397,7 +397,7 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 	for {
 		select {
 		case <-t.C:
-			logger.Info(dhTable.RoutingTable().GetPeerInfos())
+			logger.Debug("RT: ", dhTable.RoutingTable().GetPeerInfos())
 			var options []discovery.Option
 			options = append(options, discovery.TTL(peerstore.PermanentAddrTTL))
 			t, err := disc.Advertise(ctx, rendezvousString, options...)
