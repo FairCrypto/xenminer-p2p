@@ -37,7 +37,7 @@ func rpcServer(ctx context.Context, peers []*peer.AddrInfo) {
 		cr, _ := crawler.NewDefaultCrawler(h)
 		cr.Run(ctx, peers,
 			func(p peer.ID, rtPeers []*peer.AddrInfo) {
-				logger.Info(p, rtPeers)
+				logger.Info("crawl", p, rtPeers)
 				res, _ := json.Marshal(rtPeers)
 				c.SendString(string(res[:]))
 			},

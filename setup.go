@@ -339,25 +339,27 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	logger.Infof("Started announcing %d", t)
 
-	logger.Info("Searching for other peers")
-	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
-	if err != nil {
-		logger.Warn(err)
-	}
-
-	for p := range peerChan {
-		logger.Info("Peer candidate: ", p)
-		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
-			continue
-		}
-		logger.Info("Found peer:", p)
-		h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-		err = h.Connect(ctx, p)
+	/*
+		logger.Info("Searching for other peers")
+		peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
 		if err != nil {
-			logger.Warn("Error connecting to peer: ", err)
+			logger.Warn(err)
 		}
-		logger.Info("Connected to:", p)
-	}
+
+		for p := range peerChan {
+			logger.Info("Peer candidate: ", p)
+			if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
+				continue
+			}
+			logger.Info("Found peer:", p)
+			h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
+			err = h.Connect(ctx, p)
+			if err != nil {
+				logger.Warn("Error connecting to peer: ", err)
+			}
+			logger.Info("Connected to:", p)
+		}
+	*/
 
 	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	return routingDiscovery

@@ -894,7 +894,7 @@ func main() {
 
 		// setup pubsub protocol (either floodsub or gossip)
 		var pubsubOptions []pubsub.Option
-		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+		// pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
 			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
