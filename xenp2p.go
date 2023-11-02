@@ -570,7 +570,6 @@ func processNewHash(ctx context.Context) {
 				logger.Warn("Error decoding message: ", err)
 			}
 			cState <- state
-			time.Sleep(100 * time.Millisecond)
 			runtime.Gosched()
 		}
 	}()
