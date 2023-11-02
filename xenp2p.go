@@ -402,25 +402,26 @@ func discoverPeers(ctx context.Context, disc *drouting.RoutingDiscovery, destina
 			options = append(options, discovery.TTL(peerstore.PermanentAddrTTL))
 			t, err := disc.Advertise(ctx, rendezvousString, options...)
 			peerChan, err := disc.FindPeers(ctx, rendezvousString)
-			logger.Info("Searching for other peers ", t.String())
+			logger.Debug("Searching for other peers ", t.String())
 			if err != nil {
 				logger.Warn(err)
 			}
 
 			for p := range peerChan {
-				logger.Info("Maybe peer:", p)
+				logger.Debug("Maybe peer: ", p)
 				if p.ID == h.ID() ||
 					hasDestination(destinations, p.ID.String()) ||
 					hasPeer(h.Peerstore().Peers(), p.ID.String()) {
 					continue
 				}
-				logger.Info("Found peer:", p)
+				logger.Info("Found peer: ", p)
 				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 				err = h.Connect(ctx, p)
 				if err != nil {
 					logger.Warn("Error connecting to peer: ", err)
+				} else {
+					logger.Info("Connected to: ", p)
 				}
-				logger.Info("Connected to:", p)
 			}
 
 		case <-quit:
