@@ -138,8 +138,9 @@ func processBlockHeight(ctx context.Context) {
 		}
 
 		localHeight := getCurrentHeight(db)
-		if blockchainHeight > maxBlockHeight && blockchainHeight > localHeight {
+		if maxBlockHeight == 0 && blockchainHeight >= maxBlockHeight && blockchainHeight >= localHeight {
 			maxBlockHeight = blockchainHeight
+			logger.Info("MAX HEIGHT: ", maxBlockHeight)
 		}
 		if maxBlockHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
@@ -159,7 +160,7 @@ func processBlockHeight(ctx context.Context) {
 			}
 		}
 		if maxBlockHeight == localHeight {
-			logger.Info("IN SYNC: ", localHeight, "=", maxBlockHeight)
+			logger.Debug("IN SYNC: ", localHeight, "=", maxBlockHeight)
 		}
 		state.BlockHeight = uint64(maxBlockHeight)
 		runtime.Gosched()
@@ -568,6 +569,7 @@ func processNewHash(ctx context.Context) {
 				logger.Warn("Error decoding message: ", err)
 			}
 			cState <- state
+			time.Sleep(100 * time.Millisecond)
 			runtime.Gosched()
 		}
 	}()
@@ -948,10 +950,10 @@ func main() {
 			go checkConnections(ctx, destinations)
 		}
 
-		// if len(destinations) > 0 {
-		// wg.Add(1)
-		// go discoverPeers(ctx, disc, destinations)
-		// }
+		if len(destinations) > 0 {
+			wg.Add(1)
+			go discoverPeers(ctx, disc, destinations)
+		}
 
 		// wait until interrupted
 		wg.Wait()
