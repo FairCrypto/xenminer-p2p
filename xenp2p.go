@@ -872,7 +872,7 @@ func main() {
 			// dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
 			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
 		} else {
-			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeAutoServer))
+			dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
 		}
 
 		kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
