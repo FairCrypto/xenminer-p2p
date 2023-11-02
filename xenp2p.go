@@ -333,7 +333,6 @@ func processData(ctx context.Context) {
 				}
 			}
 		}
-		// time.Sleep(yieldTime)
 		runtime.Gosched()
 	}
 }
@@ -894,7 +893,7 @@ func main() {
 
 		// setup pubsub protocol (either floodsub or gossip)
 		var pubsubOptions []pubsub.Option
-		// pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
+		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
 			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
@@ -953,10 +952,10 @@ func main() {
 			go checkConnections(ctx, destinations)
 		}
 
-		if len(destinations) > 0 {
-			wg.Add(1)
-			go discoverPeers(ctx, disc, destinations)
-		}
+		// if len(destinations) > 0 {
+		//	wg.Add(1)
+		//	go discoverPeers(ctx, disc, destinations)
+		// }
 
 		// wait until interrupted
 		wg.Wait()

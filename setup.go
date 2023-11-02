@@ -319,12 +319,14 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 				logger.Warn(err)
 			} else {
 				logger.Info("Connection established with bootstrap node:", peerInfo)
-				r, err := dhTable.RoutingTable().TryAddPeer(peerInfo.ID, true, false)
-				if err != nil {
-					logger.Warn(err)
-				} else if r {
-					logger.Info("Added to RT: ", peerInfo.ID)
-				}
+				/*
+					r, err := dhTable.RoutingTable().TryAddPeer(peerInfo.ID, true, false)
+					if err != nil {
+						logger.Warn(err)
+					} else if r {
+						logger.Info("Added to RT: ", peerInfo.ID)
+					}
+				*/
 			}
 		}()
 	}
@@ -334,10 +336,8 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
-	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
-	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
-	logger.Infof("Started announcing %d", t)
+	logger.Infof("DHT started announcing for %d", t)
 
 	/*
 		logger.Info("Searching for other peers")
