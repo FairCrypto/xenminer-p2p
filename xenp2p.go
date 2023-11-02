@@ -843,6 +843,7 @@ func main() {
 	// setup connections to bootstrap peers
 	destinations := prepareBootstrapAddresses(*configPath, logger)
 	peers := lo.Map(destinations, toAddrInfo)
+	peerPtrs := lo.Map(destinations, toAddrInfoPtr)
 
 	var disc *drouting.RoutingDiscovery
 	if *client || *source != "" || *sink {
@@ -911,7 +912,7 @@ func main() {
 		ctx = context.WithValue(ctx, "subs", subs)
 
 		if node.isRpc() {
-			go rpcServer(ctx)
+			go rpcServer(ctx, peerPtrs)
 		}
 
 		// create a group of async processes

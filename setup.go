@@ -119,6 +119,18 @@ var toAddrInfo = func(destination string, _ int) peer.AddrInfo {
 	return *info
 }
 
+var toAddrInfoPtr = func(destination string, _ int) *peer.AddrInfo {
+	address, err := multiaddr.NewMultiaddr(destination)
+	if err != nil {
+		log.Println(err)
+	}
+	info, err := peer.AddrInfoFromP2pAddr(address)
+	if err != nil {
+		log.Println(err)
+	}
+	return info
+}
+
 func connectToPeer(ctx context.Context, destination string) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
