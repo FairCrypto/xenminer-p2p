@@ -83,6 +83,7 @@ type Topics struct {
 	data        *pubsub.Topic
 	get         *pubsub.Topic
 	getRaw      *pubsub.Topic
+	control     *pubsub.Topic
 }
 
 type Subs struct {
@@ -93,6 +94,7 @@ type Subs struct {
 	data        *pubsub.Subscription
 	get         *pubsub.Subscription
 	getRaw      *pubsub.Subscription
+	control     *pubsub.Subscription
 }
 
 type NetworkState struct {
@@ -737,11 +739,10 @@ func main() {
 	flag.Parse()
 
 	isSupportedRole := func(item string, index int) bool {
-		// TODO: refactor out to a global var
 		return slices.Contains(supportedRoles, item)
 	}
 	roles := lo.Filter[string](strings.Split(*roleSet, ","), isSupportedRole)
-	log.Println("roles: ", roles)
+	node := Node{roles: roles}
 
 	if *logLevel != "" {
 		level, _ := zapcore.ParseLevel(*logLevel)
@@ -769,8 +770,11 @@ func main() {
 		resetHashesDb(*configPath, logger)
 	}
 
-	logger.Info("Loading config from", *configPath)
-	logger.Info("Starting Node")
+	// initialize Node dir, peerId, DBs and ENV
+	initNode(*configPath, logger)
+
+	logger.Info("Loading config from: ", *configPath)
+	logger.Info("Starting Node: ", node)
 
 	state := &NetworkState{
 		ShiftNumber: 0,
@@ -800,6 +804,16 @@ func main() {
 		_ = hdb.Close()
 	}(hdb)
 
+	// setup control DB
+	controlDb := setupControlDB(*configPath, logger)
+	ctx = context.WithValue(ctx, "controlDb", controlDb)
+	defer func(controlDb *sql.DB) {
+		_ = controlDb.Close()
+	}(hdb)
+
+	// setup redis client
+	setupRedis(ctx)
+
 	// load peer params from config file
 	addr, privKey, peerId := loadPeerParams(*configPath, logger)
 	ctx = context.WithValue(ctx, "peerId", peerId)
@@ -815,6 +829,10 @@ func main() {
 
 	// construct a libp2p Host.
 	h := setupHost(privKey, addr)
+	for _, addr := range h.Addrs() {
+		fullAddr := fmt.Sprintf("%s/p2p/%s", addr, h.ID())
+		logger.Infof("Server address: %s", fullAddr)
+	}
 	ctx = context.WithValue(ctx, "host", h)
 	defer func(h host.Host) {
 		_ = h.Close()
@@ -824,7 +842,7 @@ func main() {
 	destinations := prepareBootstrapAddresses(*configPath, logger)
 	peers := lo.Map(destinations, toAddrInfo)
 
-	// var disc *drouting.RoutingDiscovery
+	var disc *drouting.RoutingDiscovery
 	if *client || *source != "" || *sink {
 		setupConnections(ctx, destinations)
 	}
@@ -861,20 +879,19 @@ func main() {
 			_ = kademliaDHT.Close()
 		}(kademliaDHT)
 
-		_ = setupDiscovery(ctx, destinations)
+		disc = setupDiscovery(ctx, destinations)
 		// Bootstrap the DHT. In the default configuration, this spawns a Background
 		// thread that will refresh the peer table every five minutes.
-		// logger.Info("Bootstrapping the DHT")
-		// if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		// 	panic(err)
-		// }
-		//}
+		logger.Info("Bootstrapping the DHT")
+		if err = kademliaDHT.Bootstrap(ctx); err != nil {
+			panic(err)
+		}
 
 		// setup pubsub protocol (either floodsub or gossip)
 		var pubsubOptions []pubsub.Option
 		pubsubOptions = append(pubsubOptions, pubsub.WithDirectPeers(peers))
 		if !*client {
-			// pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
+			pubsubOptions = append(pubsubOptions, pubsub.WithDiscovery(disc))
 		}
 		// ps, err := pubsub.NewFloodSub(ctx, h, pubsubOptions...)
 		ps, err := pubsub.NewGossipSub(ctx, h, pubsubOptions...)
@@ -884,14 +901,16 @@ func main() {
 			panic(err)
 		}
 
-		logger.Info("Started: ", peerId)
+		logger.Info("Started Node: ", peerId)
 
 		// subscribe to essential topics
 		topics, subs := subscribeToTopics(ps, logger)
 		ctx = context.WithValue(ctx, "topics", topics)
 		ctx = context.WithValue(ctx, "subs", subs)
 
-		go rpcServer(ctx)
+		if node.isRpc() {
+			go rpcServer(ctx)
+		}
 
 		// create a group of async processes
 		var wg sync.WaitGroup

@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"log"
 	"os"
@@ -46,7 +47,7 @@ func loadPeerParams(path string, logger log0.EventLogger) (multiaddr.Multiaddr, 
 	}
 	logger.Info("PeerId: ", peerId.Id)
 
-	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", port))
+	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", port))
 	if err != nil {
 		logger.Error("Error making address: ", err)
 	}
@@ -89,12 +90,18 @@ func prepareBootstrapAddresses(path string, logger log0.EventLogger) []string {
 				bootstrapPorts[i],
 				peerId,
 			),
-			// fmt.Sprintf(
-			//	"/ip4/%s/tcp/%s/ws/p2p/%s",
-			//	bootstrapHosts[i],
-			//	bootstrapPorts[i],
-			//	peerId,
-			// )
+			fmt.Sprintf(
+				"/ip4/%s/tcp/%s/ws/p2p/%s",
+				bootstrapHosts[i],
+				bootstrapPorts[i],
+				peerId,
+			),
+			fmt.Sprintf(
+				"/ip4/%s/udp/%s/quic-v1/p2p/%s",
+				bootstrapHosts[i],
+				bootstrapPorts[i],
+				peerId,
+			),
 		)
 	}
 	return destinations
@@ -219,25 +226,65 @@ func setupHashesDB(path string, ro bool, logger log0.EventLogger, state *Network
 	return db
 }
 
+func setupControlDB(path string, logger log0.EventLogger) *sql.DB {
+	err := godotenv.Load(path + "/.env")
+	var dbPath = ""
+	if err != nil {
+		err = nil
+	}
+	dbPath = os.Getenv("CONTROLDB_LOCATION")
+	if dbPath == "" {
+		dbPath = "file:" + path + "/control.db?cache=shared"
+	} else {
+		dbPath = "file:" + dbPath + "?cache=shared"
+	}
+
+	logger.Info("CONTROLDB path: ", dbPath+"&mode=ro")
+	db, err := sql.Open("sqlite3", dbPath+"&mode=rwc")
+	if err != nil {
+		log.Fatal("Error when opening control DB file: ", err)
+	}
+	_, err = db.Exec(createControlTableSql)
+	if err != nil {
+		log.Fatal("Error creating control table: ", err)
+	}
+	_ = db.Close()
+	db, err = sql.Open("sqlite3", dbPath+"&mode=ro")
+
+	return db
+}
+
 func setupHost(privKey crypto.PrivKey, addr multiaddr.Multiaddr) host.Host {
 	h, err := libp2p.New(
 		libp2p.ListenAddrs(addr),
 		libp2p.Identity(privKey),
-		// libp2p.Transport(tcp.NewTCPTransport),
-		// libp2p.Transport(ws.New),
-		// libp2p.Security(noise.ID, noise.New), // redundant
-		libp2p.DefaultMuxers,
-		libp2p.DefaultSecurity,
-		// libp2p.ConnectionManager(nil),
-		libp2p.DefaultTransports,
-		//we need the disable relay option in order to save the node's bandwidth as much as possible
-		libp2p.DisableRelay(),
-		// libp2p.NATPortMap(),
 	)
 	if err != nil {
 		log.Fatal("Error starting Peer: ", err)
 	}
 	return h
+}
+
+func setupRedis(ctx context.Context) (rdb *redis.Client) {
+	// logger := ctx.Value("logger").(log0.EventLogger)
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	err := rdb.Set(ctx, "test", "1", 0).Err()
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := rdb.Get(ctx, "test").Result()
+	if err != nil {
+		panic(err)
+	}
+	if val != "1" {
+		panic("RDS assert error")
+	}
+	return rdb
 }
 
 func setupDiscovery(ctx context.Context, destinations []string) *drouting.RoutingDiscovery {
@@ -275,32 +322,30 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 	// This is like telling your friends to meet you at the Eiffel Tower.
 	routingDiscovery := drouting.NewRoutingDiscovery(dhTable)
 	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
-	// t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
-	// logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
-	// logger.Infof("Started announcing %d", t)
+	t, _ := routingDiscovery.Advertise(ctx, rendezvousString)
+	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
+	logger.Infof("Started announcing %d", t)
 
-	/*
-		logger.Info("Searching for other peers")
-		peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
+	logger.Info("Searching for other peers")
+	peerChan, err := routingDiscovery.FindPeers(ctx, rendezvousString)
+	if err != nil {
+		logger.Warn(err)
+	}
+
+	for p := range peerChan {
+		logger.Info("Peer candidate: ", p)
+		if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
+			continue
+		}
+		logger.Info("Found peer:", p)
+		h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
+		err = h.Connect(ctx, p)
 		if err != nil {
-			logger.Warn(err)
+			logger.Warn("Error connecting to peer: ", err)
 		}
+		logger.Info("Connected to:", p)
+	}
 
-		for p := range peerChan {
-			logger.Info("Peer candidate: ", p)
-			if p.ID == h.ID() || hasDestination(destinations, p.ID.String()) {
-				continue
-			}
-			logger.Info("Found peer:", p)
-			h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-			err = h.Connect(ctx, p)
-			if err != nil {
-				logger.Warn("Error connecting to peer: ", err)
-			}
-			logger.Info("Connected to:", p)
-		}
-
-	*/
 	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	return routingDiscovery
 }
@@ -368,6 +413,15 @@ func subscribeToTopics(ps *pubsub.PubSub, logger log0.EventLogger) (topics Topic
 	subs.getRaw, err = topics.getRaw.Subscribe()
 	if err != nil {
 		logger.Error("Error subscribing to topic 'get_raw'", err)
+	}
+
+	topics.control, err = ps.Join("control")
+	if err != nil {
+		logger.Error("Error joining topic 'control'", err)
+	}
+	subs.control, err = topics.control.Subscribe()
+	if err != nil {
+		logger.Error("Error subscribing to topic 'control'", err)
 	}
 
 	if err != nil {

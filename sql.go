@@ -1,6 +1,14 @@
 package main
 
 const (
+	createControlTableSql string = `
+		CREATE TABLE IF NOT EXISTS control (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		blocks_range TEXT,
+		hash TEXT,
+		difficulty INTEGER)
+	`
+
 	createBlockchainTableSql string = `
 		CREATE TABLE IF NOT EXISTS blockchain (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

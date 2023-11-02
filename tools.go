@@ -22,7 +22,22 @@ import (
 	"time"
 )
 
-func initNode(path0 string, logger log0.EventLogger) {
+func checkDir(path0 string) bool {
+	var path string
+	if path0 == "" {
+		path = ".node"
+	} else {
+		path = path0
+	}
+	// check if dir doesn't exist; if no, create it
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return false
+	} else {
+		return true
+	}
+}
+
+func initDir(path0 string, logger log0.EventLogger) string {
 	logger.Info("Initializing node cfg and DB")
 	var path string
 	if path0 == "" {
@@ -32,30 +47,41 @@ func initNode(path0 string, logger log0.EventLogger) {
 	}
 	// check if dir doesn't exist; if no, create it
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		logger.Info("Created Node dir")
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
 			logger.Warn(err)
 		}
+	} else {
+		logger.Info("Node dir exists, skipping")
 	}
-	logger.Info("Created dir")
-	pathToDb := path + "/blockchain.db"
+	return path
+}
+
+func checkOrCreateDb(path string, name string, logger log0.EventLogger) {
+	pathToDb := path + "/" + name
 	if _, err := os.Stat(pathToDb); errors.Is(err, os.ErrNotExist) {
 		db, err := sql.Open("sqlite3", pathToDb)
 		if err != nil {
-			log.Fatal("Error when opening DB file: ", err)
+			logger.Fatalf("Error when opening DB file %s: %s", name, err)
 		}
 		_, err = db.Exec(initDbSql)
 		if err != nil {
-			log.Fatal("Error when init DB file: ", err)
+			logger.Fatalf("Error when init DB file %s: %s", name, err)
 		}
 		err = db.Close()
 		if err != nil {
-			log.Fatal("Error closing DB: ", err)
+			logger.Fatalf("Error closing DB %s: %s", name, err)
 		}
-		logger.Info("Created DB")
+		logger.Infof("Created DB %s", name)
+	} else {
+		logger.Infof("DB %s exists", name)
 	}
+}
 
+func checkOrCreatePeerId(path string, logger log0.EventLogger) {
 	pathToPeerId := path + "/peer.json"
+
 	if _, err := os.Stat(pathToPeerId); errors.Is(err, os.ErrNotExist) {
 		priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
 		if err != nil {
@@ -79,7 +105,38 @@ func initNode(path0 string, logger log0.EventLogger) {
 			log.Fatal("Error writing peerId file: ", err)
 		}
 		logger.Info("Created peerId file")
+	} else {
+		logger.Info("peerId file exists, skipping")
 	}
+}
+
+func checkOrCreateEnvFile(path string, logger log0.EventLogger) {
+	pathToEnv := path + "/.env"
+
+	if _, err := os.Stat(pathToEnv); errors.Is(err, os.ErrNotExist) {
+		bytes := []byte(
+			"BOOTSTRAP_HOSTS=35.87.16.125,34.208.84.148\n" +
+				"BOOTSTRAP_PORTS=10330,10330\n" +
+				"BOOTSTRAP_PEERS=12D3KooWEmj8Qy3G68gKTHroiMEn59HiziqEN7QdiHMkviBEDr69,12D3KooWGymdz8QqwdN9GuyzLK7sxcXAtBNb4RndhNGUk3Vbt1Nu")
+		err := os.WriteFile(pathToEnv, bytes, 0777)
+		if err != nil {
+			log.Fatal("Error writing ENV file: ", err)
+		}
+		logger.Info("Created ENV file")
+	} else {
+		logger.Info("ENV file exists, skipping")
+	}
+}
+
+func initNode(path0 string, logger log0.EventLogger) {
+	path := initDir(path0, logger)
+
+	checkOrCreateDb(path, "blockchain.db", logger)
+	checkOrCreateDb(path, "blocks.db", logger)
+	checkOrCreateDb(path, "control.db", logger)
+
+	checkOrCreatePeerId(path, logger)
+	checkOrCreateEnvFile(path, logger)
 }
 
 func resetBlockchainDb(path0 string, logger log0.EventLogger) {
