@@ -54,6 +54,13 @@ type HashRecord struct {
 	Account      string `json:"account"`
 }
 
+type RangeRecord struct {
+	Id          uint   `json:"id"`
+	BlocksRange string `json:"blocks_range"`
+	Hash        string `json:"hash"`
+	Difficulty  uint   `json:"difficulty"`
+}
+
 type Record struct {
 	Id           uint    `json:"id"`
 	Account      string  `json:"account"`
@@ -337,6 +344,28 @@ func processData(ctx context.Context) {
 	}
 }
 
+func processRange(ctx context.Context) {
+	subs := ctx.Value("subs").(Subs)
+	peerId := ctx.Value("peerId").(string)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	for {
+		msg, err := subs.control.Next(ctx)
+		if msg.ReceivedFrom.String() == peerId {
+			// continue
+		}
+		if err != nil {
+			logger.Warn("Error getting control message: ", err)
+		}
+		var rangeRecord RangeRecord
+		err = json.Unmarshal(msg.Data, &rangeRecord)
+		logger.Infof("RANGE: %s < %s", rangeRecord, msg.ReceivedFrom.String()[:8])
+		if err != nil {
+			logger.Warn("Error converting data message: ", err)
+		}
+	}
+}
+
 func hasPeer(peers peer.IDSlice, p string) bool {
 	for i := 0; i < peers.Len(); i++ {
 		if strings.HasSuffix(p, peers[i].String()) {
@@ -497,6 +526,40 @@ func broadcastLastHash(ctx context.Context) {
 				err = topics.newHash.Publish(ctx, bytes)
 				if err != nil {
 					log.Fatal("Error publishing message", err)
+				}
+			}
+		case <-quit:
+			t.Stop()
+			return
+		}
+	}
+}
+
+func broadcastLastRange(ctx context.Context) {
+	topics := ctx.Value("topics").(Topics)
+	controlDb := ctx.Value("controlDb").(*sql.DB)
+	logger := ctx.Value("logger").(log0.EventLogger)
+
+	// t := time.NewTicker(100 * time.Millisecond)
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	quit := make(chan struct{})
+
+	for {
+		select {
+		case <-t.C:
+			lastRange := getLatestRange(controlDb)
+
+			if lastRange != nil {
+				bytes, err := json.Marshal(*lastRange)
+				if err != nil {
+					logger.Fatal("Error converting range", err)
+				}
+				err = topics.control.Publish(ctx, bytes)
+				if err != nil {
+					logger.Fatal("Error publishing message", err)
+				} else {
+					logger.Info("RANGE: ", lastRange)
 				}
 			}
 		case <-quit:
@@ -799,7 +862,6 @@ func main() {
 	// setup hash/xuni DB and check / init table(s)
 	hdb := setupHashesDB(*configPath, *readOnlyDB, logger, state)
 	logger.Infof("Latest state: %d", state)
-
 	ctx = context.WithValue(ctx, "dbh", hdb)
 	defer func(hdb *sql.DB) {
 		_ = hdb.Close()
@@ -810,7 +872,7 @@ func main() {
 	ctx = context.WithValue(ctx, "controlDb", controlDb)
 	defer func(controlDb *sql.DB) {
 		_ = controlDb.Close()
-	}(hdb)
+	}(controlDb)
 
 	// setup redis client
 	setupRedis(ctx)
@@ -927,6 +989,9 @@ func main() {
 		go processData(ctx)
 
 		wg.Add(1)
+		go processRange(ctx)
+
+		wg.Add(1)
 		go processGet(ctx)
 
 		wg.Add(1)
@@ -937,6 +1002,9 @@ func main() {
 
 		wg.Add(1)
 		go broadcastBlockHeight(ctx)
+
+		wg.Add(1)
+		go broadcastLastRange(ctx)
 
 		if peerId == masterPeerId {
 			wg.Add(1)

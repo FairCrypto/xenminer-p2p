@@ -9,6 +9,11 @@ const (
 		difficulty INTEGER)
 	`
 
+	insertRangeSql = `
+		INSERT INTO control (id, blocks_range, hash, difficulty)
+		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING;
+	`
+
 	createBlockchainTableSql string = `
 		CREATE TABLE IF NOT EXISTS blockchain (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,6 +133,13 @@ const (
 		SELECT block_id, hash_to_verify, key, account, created_at 
 		FROM blocks 
 		ORDER BY block_id DESC 
+		LIMIT 1;
+	`
+
+	getLatestRangeSql string = `
+		SELECT id, blocks_range, hash, difficulty
+		FROM control 
+		ORDER BY id DESC 
 		LIMIT 1;
 	`
 

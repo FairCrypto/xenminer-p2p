@@ -223,6 +223,44 @@ func getLatestHash(db *sql.DB) *HashRecord {
 	return &hash
 }
 
+func getLatestRange(db *sql.DB) *RangeRecord {
+	rows, err := db.Query(getLatestRangeSql)
+	if err != nil {
+		log.Println("Error when querying Control DB: ", err)
+		return nil
+	}
+	var record RangeRecord
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Error when closing rows: ", err)
+		}
+	}(rows)
+	rows.Next()
+	err = rows.Scan(
+		&record.Id,
+		&record.BlocksRange,
+		&record.Hash,
+		&record.Difficulty,
+	)
+	if err != nil {
+		log.Println("Error retrieving data from Control DB: ", err)
+		return nil
+	}
+	return &record
+}
+
+func insertRangeRecord(db *sql.DB, record RangeRecord) error {
+	_, err := db.Exec(
+		insertRangeSql,
+		record.Id,
+		record.BlocksRange,
+		record.Hash,
+		record.Difficulty,
+	)
+	return err
+}
+
 func getLatestXuni(db *sql.DB) *HashRecord {
 	rows, err := db.Query(getLatestXuniSql)
 	if err != nil {
