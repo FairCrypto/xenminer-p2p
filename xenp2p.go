@@ -377,8 +377,8 @@ func processRange(ctx context.Context) {
 		}
 		if msg.ReceivedFrom.String() != peerId {
 			from := msg.ReceivedFrom.String()[len(msg.ReceivedFrom.String())-8:]
-			if rangeRecord.Node != msg.ReceivedFrom.String() {
-				logger.Warn("!! Tampered NodeId: expected %s, received %s", msg.ReceivedFrom.String(), rangeRecord.Node)
+			if rangeRecord.Node != msg.ReceivedFrom.String() && rangeRecord.Node != "myself" {
+				logger.Warnf("!! Tampered NodeId: expected %s, received %s", msg.ReceivedFrom.String(), rangeRecord.Node)
 			}
 			rangeRecord.Node = msg.ReceivedFrom.String()
 			err = insertRangeRecord(controlDb, rangeRecord)
