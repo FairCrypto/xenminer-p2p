@@ -61,6 +61,10 @@ type RangeRecord struct {
 	Difficulty  uint   `json:"difficulty"`
 }
 
+func (r RangeRecord) String() string {
+	return fmt.Sprintf("%d|%s|%s|%d", r.Id, r.BlocksRange, r.Hash, r.Difficulty)
+}
+
 type Record struct {
 	Id           uint    `json:"id"`
 	Account      string  `json:"account"`
@@ -348,21 +352,28 @@ func processRange(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
+	lastRangeId := 0
 
 	for {
 		msg, err := subs.control.Next(ctx)
-		if msg.ReceivedFrom.String() == peerId {
-			// continue
-		}
 		if err != nil {
 			logger.Warn("Error getting control message: ", err)
+			continue
+		}
+		if msg.ReceivedFrom.String() == peerId {
+			continue
 		}
 		var rangeRecord RangeRecord
 		err = json.Unmarshal(msg.Data, &rangeRecord)
-		logger.Infof("RANGE: %s < %s", rangeRecord, msg.ReceivedFrom.String()[:8])
 		if err != nil {
 			logger.Warn("Error converting data message: ", err)
 		}
+		if rangeRecord.Id > uint(lastRangeId) {
+			from := msg.ReceivedFrom.String()[len(msg.ReceivedFrom.String())-8:]
+			logger.Infof("RANGE: %s < %s", rangeRecord.String(), from)
+			lastRangeId = int(rangeRecord.Id)
+		}
+		runtime.Gosched()
 	}
 }
 
@@ -544,6 +555,7 @@ func broadcastLastRange(ctx context.Context) {
 	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
+	var lastRangeId uint = 0
 
 	for {
 		select {
@@ -555,11 +567,14 @@ func broadcastLastRange(ctx context.Context) {
 				if err != nil {
 					logger.Fatal("Error converting range", err)
 				}
-				err = topics.control.Publish(ctx, bytes)
-				if err != nil {
-					logger.Fatal("Error publishing message", err)
-				} else {
-					logger.Info("RANGE: ", lastRange)
+				if lastRange.Id > lastRangeId {
+					err = topics.control.Publish(ctx, bytes)
+					if err != nil {
+						logger.Fatal("Error publishing message", err)
+					} else {
+						logger.Infof("RANGE: %s >", lastRange)
+						lastRangeId = lastRange.Id
+					}
 				}
 			}
 		case <-quit:

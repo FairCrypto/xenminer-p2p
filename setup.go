@@ -339,7 +339,6 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 		}()
 	}
 	wg.Wait()
-	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 
 	// We use a rendezvous point "meet me here" to announce our location.
 	// This is like telling your friends to meet you at the Eiffel Tower.
@@ -369,7 +368,6 @@ func setupDiscovery(ctx context.Context, destinations []string) *drouting.Routin
 		}
 	*/
 
-	logger.Info("RT", dhTable.RoutingTable().GetPeerInfos())
 	return routingDiscovery
 }
 
