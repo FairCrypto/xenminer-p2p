@@ -383,7 +383,7 @@ func processRange(ctx context.Context) {
 			rangeRecord.Node = msg.ReceivedFrom.String()
 			err = insertRangeRecord(controlDb, rangeRecord)
 			if err != nil {
-				logger.Warn("Error inserting range: ", err)
+				logger.Debug("Error inserting range: ", err)
 			} else {
 				logger.Infof("RANGE: %s < %s", rangeRecord.String(), from)
 				rangeRecord.Node = peerId
