@@ -64,7 +64,11 @@ type RangeRecord struct {
 }
 
 func (r RangeRecord) String() string {
-	return fmt.Sprintf("%d|%s|%s|%d", r.Id, r.BlocksRange, r.Hash, r.Difficulty)
+	node := r.Node
+	if len(r.Node) >= 8 {
+		node = r.Node[len(r.Node)-8:]
+	}
+	return fmt.Sprintf("%s|%s|%s|%d", r.BlocksRange, node, r.Hash, r.Difficulty)
 }
 
 type Record struct {
@@ -352,10 +356,10 @@ func processData(ctx context.Context) {
 
 func processRange(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
+	topics := ctx.Value("topics").(Topics)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
 	controlDb := ctx.Value("controlDb").(*sql.DB)
-	lastRangeId := 0
 
 	for {
 		msg, err := subs.control.Next(ctx)
@@ -371,16 +375,28 @@ func processRange(ctx context.Context) {
 		if err != nil {
 			logger.Warn("Error converting data message: ", err)
 		}
-		if rangeRecord.Id > uint(lastRangeId) && msg.ReceivedFrom.String() != peerId {
+		if msg.ReceivedFrom.String() != peerId {
 			from := msg.ReceivedFrom.String()[len(msg.ReceivedFrom.String())-8:]
+			if rangeRecord.Node != msg.ReceivedFrom.String() {
+				logger.Warn("!! Tampered NodeId: expected %s, received %s", msg.ReceivedFrom.String(), rangeRecord.Node)
+			}
 			rangeRecord.Node = msg.ReceivedFrom.String()
-			rangeRecord.Ts = time.Now().Unix()
 			err = insertRangeRecord(controlDb, rangeRecord)
 			if err != nil {
 				logger.Warn("Error inserting range: ", err)
+			} else {
+				logger.Infof("RANGE: %s < %s", rangeRecord.String(), from)
+				rangeRecord.Node = peerId
+				bytes, err := json.Marshal(rangeRecord)
+				if err != nil {
+					logger.Warn("Error converting range: ", err)
+				}
+				err = topics.control.Publish(ctx, bytes)
+				if err != nil {
+					logger.Warn("Error publishing range: ", err)
+				}
+				logger.Infof("RANGE: %s >", rangeRecord.String())
 			}
-			logger.Infof("RANGE: %s < %s", rangeRecord.String(), from)
-			lastRangeId = int(rangeRecord.Id)
 		}
 		runtime.Gosched()
 	}

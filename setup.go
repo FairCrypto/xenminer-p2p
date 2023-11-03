@@ -260,11 +260,13 @@ func setupControlDB(path string, logger log0.EventLogger) *sql.DB {
 	}
 
 	// TODO: remove after tests
-	// testRange := RangeRecord{Id: 1, BlocksRange: "0-1", Hash: "hash", Difficulty: 1}
-	// err0 := insertRangeRecord(db, testRange)
-	// if err0 != nil {
-	// 	logger.Warn("err ", err0)
-	// }
+	/*
+		testRange := RangeRecord{Id: 1, BlocksRange: "0-1", Hash: "hash", Difficulty: 1, Node: "myself"}
+		err0 := insertRangeRecord(db, testRange)
+		if err0 != nil {
+			logger.Warn("err ", err0)
+		}
+	*/
 
 	// _ = db.Close()
 	// db, err = sql.Open("sqlite3", dbPath+"&mode=ro")

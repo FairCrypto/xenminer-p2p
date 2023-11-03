@@ -9,6 +9,7 @@ const (
             hash TEXT,
             difficulty INT,
             ts INTEGER);
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_node_blocks_range ON control (node, blocks_range);
 	`
 
 	insertRangeSql = `
@@ -141,6 +142,7 @@ const (
 	getLatestRangeSql string = `
 		SELECT id, node, blocks_range, hash, difficulty, ts
 		FROM control 
+		WHERE node = 'myself'
 		ORDER BY id DESC 
 		LIMIT 1;
 	`
