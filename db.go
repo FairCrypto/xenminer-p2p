@@ -239,10 +239,10 @@ func getLatestRange(db *sql.DB) *RangeRecord {
 	rows.Next()
 	err = rows.Scan(
 		&record.Id,
+		&record.Node,
 		&record.BlocksRange,
 		&record.Hash,
 		&record.Difficulty,
-		&record.PeerId,
 		&record.Ts,
 	)
 	if err != nil {
@@ -256,10 +256,10 @@ func insertRangeRecord(db *sql.DB, record RangeRecord) error {
 	_, err := db.Exec(
 		insertRangeSql,
 		record.Id,
+		record.Node,
 		record.BlocksRange,
 		record.Hash,
 		record.Difficulty,
-		record.PeerId,
 		record.Ts,
 	)
 	return err

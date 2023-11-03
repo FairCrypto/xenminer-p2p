@@ -56,11 +56,11 @@ type HashRecord struct {
 
 type RangeRecord struct {
 	Id          uint   `json:"id"`
+	Node        string `json:"node"`
 	BlocksRange string `json:"blocks_range"`
 	Hash        string `json:"hash"`
 	Difficulty  uint   `json:"difficulty"`
-	PeerId      string `json:"peer_id"`
-	Ts          string `json:"ts"`
+	Ts          int64  `json:"ts"`
 }
 
 func (r RangeRecord) String() string {
@@ -373,8 +373,8 @@ func processRange(ctx context.Context) {
 		}
 		if rangeRecord.Id > uint(lastRangeId) && msg.ReceivedFrom.String() != peerId {
 			from := msg.ReceivedFrom.String()[len(msg.ReceivedFrom.String())-8:]
-			rangeRecord.PeerId = msg.ReceivedFrom.String()
-			rangeRecord.Ts = time.Now().Format(time.RFC3339)
+			rangeRecord.Node = msg.ReceivedFrom.String()
+			rangeRecord.Ts = time.Now().Unix()
 			err = insertRangeRecord(controlDb, rangeRecord)
 			if err != nil {
 				logger.Warn("Error inserting range: ", err)

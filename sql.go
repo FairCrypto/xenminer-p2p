@@ -2,17 +2,17 @@ package main
 
 const (
 	createControlTableSql string = `
-		CREATE TABLE IF NOT EXISTS control (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		blocks_range TEXT,
-		hash TEXT,
-		difficulty INTEGER, 
-		peer_id TEXT, 
-		ts TIMESTAMPTZ)
+			CREATE TABLE IF NOT EXISTS control (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node TEXT,
+            blocks_range TEXT,
+            hash TEXT,
+            difficulty INT,
+            ts INTEGER);
 	`
 
 	insertRangeSql = `
-		INSERT INTO control (id, blocks_range, hash, difficulty, peer_id, ts)
+		INSERT INTO control (id, node, blocks_range, hash, difficulty, ts)
 		VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 
@@ -139,7 +139,7 @@ const (
 	`
 
 	getLatestRangeSql string = `
-		SELECT id, blocks_range, hash, difficulty, peer_id, ts
+		SELECT id, node, blocks_range, hash, difficulty, ts
 		FROM control 
 		ORDER BY id DESC 
 		LIMIT 1;
