@@ -561,7 +561,7 @@ func broadcastLastRange(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	// t := time.NewTicker(100 * time.Millisecond)
-	t := time.NewTicker(10 * time.Second)
+	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 	var lastRangeId uint = 0
