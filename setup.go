@@ -246,13 +246,11 @@ func setupControlDB(path string, logger log0.EventLogger) *sql.DB {
 	}
 	dbPath = os.Getenv("CONTROLDB_LOCATION")
 	if dbPath == "" {
-		dbPath = "file:" + path + "/control.db?cache=shared"
-	} else {
-		dbPath = "file:" + dbPath + "?cache=shared"
+		dbPath = path + "/control.db"
 	}
 
-	logger.Info("CONTROL DB path: ", dbPath+"&mode=rwc")
-	db, err := sql.Open("sqlite3", dbPath+"&mode=rwc")
+	logger.Info("CONTROL DB path: ", dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Error when opening control DB file: ", err)
 	}
