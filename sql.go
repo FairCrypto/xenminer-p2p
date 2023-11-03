@@ -12,8 +12,8 @@ const (
 	`
 
 	insertRangeSql = `
-		INSERT INTO control (id, node, blocks_range, hash, difficulty, ts)
-		VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
+		INSERT INTO control (node, blocks_range, hash, difficulty, ts)
+		VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 
 	createBlockchainTableSql string = `

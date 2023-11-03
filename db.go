@@ -255,7 +255,7 @@ func getLatestRange(db *sql.DB) *RangeRecord {
 func insertRangeRecord(db *sql.DB, record RangeRecord) error {
 	_, err := db.Exec(
 		insertRangeSql,
-		record.Id,
+		// record.Id,
 		record.Node,
 		record.BlocksRange,
 		record.Hash,
