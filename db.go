@@ -242,6 +242,8 @@ func getLatestRange(db *sql.DB) *RangeRecord {
 		&record.BlocksRange,
 		&record.Hash,
 		&record.Difficulty,
+		&record.PeerId,
+		&record.Ts,
 	)
 	if err != nil {
 		log.Println("Error retrieving data from Control DB: ", err)
@@ -257,6 +259,8 @@ func insertRangeRecord(db *sql.DB, record RangeRecord) error {
 		record.BlocksRange,
 		record.Hash,
 		record.Difficulty,
+		record.PeerId,
+		record.Ts,
 	)
 	return err
 }

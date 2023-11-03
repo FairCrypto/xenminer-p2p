@@ -59,6 +59,8 @@ type RangeRecord struct {
 	BlocksRange string `json:"blocks_range"`
 	Hash        string `json:"hash"`
 	Difficulty  uint   `json:"difficulty"`
+	PeerId      string `json:"peer_id"`
+	Ts          string `json:"ts"`
 }
 
 func (r RangeRecord) String() string {
@@ -352,6 +354,7 @@ func processRange(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
+	controlDb := ctx.Value("controlDb").(*sql.DB)
 	lastRangeId := 0
 
 	for {
@@ -368,8 +371,14 @@ func processRange(ctx context.Context) {
 		if err != nil {
 			logger.Warn("Error converting data message: ", err)
 		}
-		if rangeRecord.Id > uint(lastRangeId) {
+		if rangeRecord.Id > uint(lastRangeId) && msg.ReceivedFrom.String() != peerId {
 			from := msg.ReceivedFrom.String()[len(msg.ReceivedFrom.String())-8:]
+			rangeRecord.PeerId = msg.ReceivedFrom.String()
+			rangeRecord.Ts = time.Now().Format(time.RFC3339)
+			err = insertRangeRecord(controlDb, rangeRecord)
+			if err != nil {
+				logger.Warn("Error inserting range: ", err)
+			}
 			logger.Infof("RANGE: %s < %s", rangeRecord.String(), from)
 			lastRangeId = int(rangeRecord.Id)
 		}

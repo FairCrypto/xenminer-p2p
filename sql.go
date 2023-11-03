@@ -6,12 +6,14 @@ const (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		blocks_range TEXT,
 		hash TEXT,
-		difficulty INTEGER)
+		difficulty INTEGER, 
+		peer_id TEXT, 
+		ts TIMESTAMPTZ)
 	`
 
 	insertRangeSql = `
-		INSERT INTO control (id, blocks_range, hash, difficulty)
-		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING;
+		INSERT INTO control (id, blocks_range, hash, difficulty, peer_id, ts)
+		VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 	`
 
 	createBlockchainTableSql string = `
@@ -137,7 +139,7 @@ const (
 	`
 
 	getLatestRangeSql string = `
-		SELECT id, blocks_range, hash, difficulty
+		SELECT id, blocks_range, hash, difficulty, peer_id, ts
 		FROM control 
 		ORDER BY id DESC 
 		LIMIT 1;
