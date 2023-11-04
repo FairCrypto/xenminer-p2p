@@ -4,6 +4,9 @@
 
 1. Install Go
 
+!!! Warning: your machine could have Go preinstalled with Linux.
+for XENMiner to work, you need recent version of Go !!!
+
 Instructions: https://go.dev/doc/install
 
 2. Install sqlite
