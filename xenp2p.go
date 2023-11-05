@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 	"slices"
@@ -302,6 +303,14 @@ func validateBlock(block Block, logger log0.EventLogger) (bool, error) {
 	return merkleRoot == block.MerkleRoot, err
 }
 
+func shouldRespond() bool {
+	dice := rand.Intn(100)
+	if dice < 5 {
+		return true
+	}
+	return false
+}
+
 func processData(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
 	db := ctx.Value("db").(*sql.DB)
@@ -310,7 +319,8 @@ func processData(ctx context.Context) {
 
 	for {
 		msg, err := subs.data.Next(ctx)
-		if msg.ReceivedFrom.String() == peerId {
+
+		if msg.ReceivedFrom.String() == peerId || !shouldRespond() {
 			continue
 		}
 		if err != nil {
