@@ -166,7 +166,7 @@ func processBlockHeight(ctx context.Context) {
 		}
 		if maxBlockHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
-			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 20))
+			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 2_000))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -182,19 +182,21 @@ func processBlockHeight(ctx context.Context) {
 			}
 		} else {
 			// TODO: tests only
-			want := make([]uint, 10)
-			for i := uint(0); i < 10; i++ {
-				want[i] = i + 1
-				wantedBlockIds.Set(fmt.Sprintf("%d", i+1), true)
-			}
-			msgBytes, err := json.Marshal(want)
-			if err != nil {
-				logger.Warn("Error encoding message: ", err)
-			}
-			err = topics.get.Publish(ctx, msgBytes)
-			if err != nil {
-				logger.Warn("Error publishing message: ", err)
-			}
+			/*
+				want := make([]uint, 10)
+				for i := uint(0); i < 10; i++ {
+					want[i] = i + 1
+					wantedBlockIds.Set(fmt.Sprintf("%d", i+1), true)
+				}
+				msgBytes, err := json.Marshal(want)
+				if err != nil {
+					logger.Warn("Error encoding message: ", err)
+				}
+				err = topics.get.Publish(ctx, msgBytes)
+				if err != nil {
+					logger.Warn("Error publishing message: ", err)
+				}
+			*/
 		}
 		if maxBlockHeight == localHeight {
 			logger.Debug("IN SYNC: ", localHeight, "=", maxBlockHeight)
@@ -225,7 +227,7 @@ func processGet(ctx context.Context) {
 		if err != nil {
 			logger.Warn("Error converting want message: ", err)
 		}
-		logger.Debug("WANT block_id(s):", blockIds)
+		logger.Debug("WANT block_id(s):", len(blockIds))
 		var blocks Blocks
 
 		conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
@@ -245,13 +247,14 @@ func processGet(ctx context.Context) {
 			}
 		}
 		logger.Info("SEND block(s):", len(blocks))
+		t := time.Now().UnixMilli()
 		bytes, err := json.Marshal(&blocks)
 		// n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 		n, err := rw.Write(append(bytes, '\n'))
 		if err != nil {
 			logger.Warn("Error sending stream: ", err)
 		} else {
-			logger.Infof("Wrote: %d b", n)
+			logger.Infof("Wrote: %d b in %d ms", n, time.Now().UnixMilli()-t)
 			time.Sleep(2 * time.Second)
 			err = rw.Flush()
 			err = conn.Close()
