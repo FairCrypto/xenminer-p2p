@@ -569,7 +569,7 @@ func broadcastBlockHeight(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	db := ctx.Value("db").(*sql.DB)
 
-	t := time.NewTicker(2 * time.Second)
+	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 
