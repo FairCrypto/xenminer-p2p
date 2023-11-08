@@ -434,7 +434,7 @@ func decodeBlocks(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 
 	go func() {
 		for {
-			str, err := rw.ReadString('\n')
+			str, err := rw.ReadString(0)
 			if err != nil {
 				logger.Warn("read err: ", err)
 				quit <- struct{}{}
