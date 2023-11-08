@@ -146,6 +146,7 @@ func processBlockHeight(ctx context.Context) {
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		}
+		logger.Infof("From %s, sender %s", msg.ReceivedFrom.String(), msg.GetFrom().String())
 		if err != nil {
 			logger.Warn("Error getting message: ", err)
 		}
@@ -1042,7 +1043,7 @@ func main() {
 		go processRange(ctx)
 
 		wg.Add(1)
-		go processGet(ctx)
+		// go processGet(ctx)
 
 		wg.Add(1)
 		go processGetRaw(ctx)
