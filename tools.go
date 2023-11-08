@@ -467,10 +467,10 @@ func doReceive(ctx context.Context, proto protocol.ID) {
 	h.SetStreamHandler(proto, func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-		log.Println("Reading stream")
+		logger.Debug("Reading stream")
 		// err := decode(rw, logger)
 		err := decodeBlocks(rw, logger)
-		logger.Info("Stream: ", err)
+		logger.Info("Stream err: ", err)
 	})
 	logger.Info("Listening")
 

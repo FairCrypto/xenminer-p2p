@@ -246,11 +246,13 @@ func processGet(ctx context.Context) {
 		}
 		logger.Info("SEND block(s):", len(blocks))
 		bytes, err := json.Marshal(&blocks)
-		n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+		// n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+		n, err := rw.Write(bytes)
 		if err != nil {
 			logger.Warn("Error sending stream: ", err)
 		} else {
 			logger.Infof("Wrote: %d b", n)
+			time.Sleep(2 * time.Second)
 			err = rw.Flush()
 			err = conn.Close()
 			if err != nil {
