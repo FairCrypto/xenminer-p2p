@@ -427,11 +427,11 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 
 }
 
-func doReceive(ctx context.Context) {
+func doReceive(ctx context.Context, proto protocol.ID) {
 	h := ctx.Value("host").(host.Host)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
-	h.SetStreamHandler(protocol.TestingID, func(s network.Stream) {
+	h.SetStreamHandler(proto, func(s network.Stream) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 		log.Println("Reading stream")

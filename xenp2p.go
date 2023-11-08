@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -15,6 +16,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	_ "github.com/mattn/go-sqlite3"
 	cmap "github.com/orcaman/concurrent-map/v2"
@@ -146,7 +148,8 @@ func processBlockHeight(ctx context.Context) {
 		if msg.ReceivedFrom.String() == peerId {
 			continue
 		}
-		logger.Infof("From %s, sender %s", msg.ReceivedFrom.String(), msg.GetFrom().String())
+		logger.Debugf("From %s via %s", msg.GetFrom().String(), msg.ReceivedFrom.String())
+
 		if err != nil {
 			logger.Warn("Error getting message: ", err)
 		}
@@ -177,6 +180,21 @@ func processBlockHeight(ctx context.Context) {
 			if err != nil {
 				logger.Warn("Error publishing message: ", err)
 			}
+		} else {
+			// TODO: tests only
+			want := make([]uint, 10)
+			for i := uint(0); i < 10; i++ {
+				want[i] = i + 1
+				wantedBlockIds.Set(fmt.Sprintf("%d", i+1), true)
+			}
+			msgBytes, err := json.Marshal(want)
+			if err != nil {
+				logger.Warn("Error encoding message: ", err)
+			}
+			err = topics.get.Publish(ctx, msgBytes)
+			if err != nil {
+				logger.Warn("Error publishing message: ", err)
+			}
 		}
 		if maxBlockHeight == localHeight {
 			logger.Debug("IN SYNC: ", localHeight, "=", maxBlockHeight)
@@ -188,8 +206,9 @@ func processBlockHeight(ctx context.Context) {
 
 func processGet(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
-	topics := ctx.Value("topics").(Topics)
+	// topics := ctx.Value("topics").(Topics)
 	db := ctx.Value("db").(*sql.DB)
+	h := ctx.Value("host").(host.Host)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
 
@@ -208,6 +227,16 @@ func processGet(ctx context.Context) {
 		}
 		logger.Debug("WANT block_id(s):", blockIds)
 		var blocks Blocks
+
+		conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
+		if err != nil {
+			logger.Warn("Err in conn ", err)
+		}
+
+		rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
+		logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
+
 		for _, blockId := range blockIds {
 			block, err := getBlock(db, blockId)
 			// NB: ignoring the error which might result from missing blocks
@@ -215,12 +244,31 @@ func processGet(ctx context.Context) {
 				blocks = append(blocks, *block)
 			}
 		}
-		logger.Debug("SEND block(s):", len(blocks))
+		logger.Info("SEND block(s):", len(blocks))
 		bytes, err := json.Marshal(&blocks)
-		err = topics.data.Publish(ctx, bytes)
+		n, err := rw.Write(bytes)
 		if err != nil {
-			logger.Warn("Error publishing data message: ", err)
+			logger.Warn("Error sending stream: ", err)
+		} else {
+			logger.Infof("Wrote: %d b", n)
 		}
+
+		/*
+			for _, blockId := range blockIds {
+				block, err := getBlock(db, blockId)
+				// NB: ignoring the error which might result from missing blocks
+				if err == nil {
+					blocks = append(blocks, *block)
+				}
+			}
+			logger.Debug("SEND block(s):", len(blocks))
+			bytes, err := json.Marshal(&blocks)
+			err = topics.data.Publish(ctx, bytes)
+			if err != nil {
+				logger.Warn("Error publishing data message: ", err)
+			}
+
+		*/
 		runtime.Gosched()
 	}
 }
@@ -971,7 +1019,7 @@ func main() {
 		select {}
 
 	} else if *sink {
-		doReceive(ctx)
+		doReceive(ctx, protocol.TestingID)
 		// select {}
 
 	} else {
@@ -1043,7 +1091,7 @@ func main() {
 		go processRange(ctx)
 
 		wg.Add(1)
-		// go processGet(ctx)
+		go processGet(ctx)
 
 		wg.Add(1)
 		go processGetRaw(ctx)
@@ -1070,6 +1118,8 @@ func main() {
 			wg.Add(1)
 			go checkConnections(ctx, destinations)
 		}
+
+		doReceive(ctx, "/xen/blocks/sync/0.1.0")
 
 		// if len(destinations) > 0 {
 		//	wg.Add(1)
