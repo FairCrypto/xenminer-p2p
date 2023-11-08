@@ -231,10 +231,10 @@ func processGet(ctx context.Context) {
 		conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
 		if err != nil {
 			logger.Warn("Err in conn ", err)
+			continue
 		}
 
 		rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-
 		logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
 
 		for _, blockId := range blockIds {
@@ -251,6 +251,11 @@ func processGet(ctx context.Context) {
 			logger.Warn("Error sending stream: ", err)
 		} else {
 			logger.Infof("Wrote: %d b", n)
+			err = rw.Flush()
+			err = conn.Close()
+			if err != nil {
+				logger.Warn("Error closing stream: ", err)
+			}
 		}
 
 		/*

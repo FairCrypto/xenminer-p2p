@@ -417,10 +417,44 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 	for {
 		select {
 		case <-t.C:
-			logger.Infof("Rec %d byte/s", count)
+			// logger.Infof("Rec %d byte/s", count)
 			count = 0
 		case <-quit:
 			t.Stop()
+			return errors.New("stopped")
+		}
+	}
+
+}
+
+func decodeBlocks(rw *bufio.ReadWriter, logger log0.EventLogger) error {
+	buff := make([]byte, 2048)
+	quit := make(chan struct{})
+	count := 0
+	// series := 0
+
+	go func() {
+		for {
+			n, err := rw.Read(buff)
+			if err != nil {
+				logger.Warn("read err: ", err)
+				quit <- struct{}{}
+				return
+			} else {
+				count += n
+				var blocks Blocks
+				err = json.Unmarshal(buff, &blocks)
+				logger.Debug("RECV: ", len(blocks))
+				if err != nil {
+					logger.Warn("Error converting data message: ", err)
+				}
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-quit:
 			return errors.New("stopped")
 		}
 	}
@@ -435,7 +469,8 @@ func doReceive(ctx context.Context, proto protocol.ID) {
 		logger.Info("listener received new stream", s.Stat())
 		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 		log.Println("Reading stream")
-		err := decode(rw, logger)
+		// err := decode(rw, logger)
+		err := decodeBlocks(rw, logger)
 		logger.Info("Stream: ", err)
 	})
 	logger.Info("Listening")
