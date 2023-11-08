@@ -428,21 +428,21 @@ func decode(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 }
 
 func decodeBlocks(rw *bufio.ReadWriter, logger log0.EventLogger) error {
-	buff := make([]byte, 2048)
+	// buff := make([]byte, 2048)
 	quit := make(chan struct{})
-	count := 0
+	// count := 0
 
 	go func() {
 		for {
-			n, err := rw.Read(buff)
+			str, err := rw.ReadString('\n')
 			if err != nil {
 				logger.Warn("read err: ", err)
 				quit <- struct{}{}
 				return
 			} else {
-				count += n
+				// count += n
 				var blocks Blocks
-				err = json.Unmarshal(buff, &blocks)
+				err = json.Unmarshal([]byte(str), &blocks)
 				logger.Debug("RECV: ", len(blocks))
 				if err != nil {
 					logger.Warn("Error converting data message: ", err)
