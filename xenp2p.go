@@ -246,7 +246,7 @@ func processGet(ctx context.Context) {
 		}
 		logger.Info("SEND block(s):", len(blocks))
 		bytes, err := json.Marshal(&blocks)
-		n, err := rw.Write(bytes)
+		n, err := rw.WriteString(string(bytes))
 		if err != nil {
 			logger.Warn("Error sending stream: ", err)
 		} else {

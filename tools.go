@@ -431,7 +431,6 @@ func decodeBlocks(rw *bufio.ReadWriter, logger log0.EventLogger) error {
 	buff := make([]byte, 2048)
 	quit := make(chan struct{})
 	count := 0
-	// series := 0
 
 	go func() {
 		for {
