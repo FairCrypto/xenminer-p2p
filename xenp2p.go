@@ -137,7 +137,8 @@ var wantedBlockIds = cmap.New[bool]()
 
 func processBlockHeight(ctx context.Context) {
 	subs := ctx.Value("subs").(Subs)
-	topics := ctx.Value("topics").(Topics)
+	// topics := ctx.Value("topics").(Topics)
+	h := ctx.Value("host").(host.Host)
 	db := ctx.Value("db").(*sql.DB)
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
@@ -172,14 +173,38 @@ func processBlockHeight(ctx context.Context) {
 				want[i] = localHeight + i + 1
 				wantedBlockIds.Set(fmt.Sprintf("%d", localHeight+i+1), true)
 			}
-			msgBytes, err := json.Marshal(want)
+			conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
 			if err != nil {
-				logger.Warn("Error encoding message: ", err)
+				logger.Warn("Err in conn ", err)
+				continue
 			}
-			err = topics.get.Publish(ctx, msgBytes)
-			if err != nil {
-				logger.Warn("Error publishing message: ", err)
+
+			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
+
+			var blockRequest BlockRequest
+
+			for blockId := range want {
+				blockRequest = BlockRequest{NextId: int64(blockId)}
+				bytes, err := json.Marshal(blockRequest)
+				if err != nil {
+					logger.Warn("Err in marshall ", err)
+				} else {
+					_, err = rw.Write(bytes)
+					logger.Infof("Requested Block# %d", blockId)
+				}
 			}
+
+			/*
+				msgBytes, err := json.Marshal(want)
+				if err != nil {
+					logger.Warn("Error encoding message: ", err)
+				}
+				err = topics.get.Publish(ctx, msgBytes)
+				if err != nil {
+					logger.Warn("Error publishing message: ", err)
+				}
+			*/
 		} else {
 			// TODO: tests only
 			/*
@@ -1094,14 +1119,14 @@ func main() {
 		wg.Add(1)
 		go processBlockHeight(ctx)
 
-		wg.Add(1)
-		go processData(ctx)
+		// wg.Add(1)
+		// go processData(ctx)
 
 		wg.Add(1)
 		go processRange(ctx)
 
-		wg.Add(1)
-		go processGet(ctx)
+		// wg.Add(1)
+		// go processGet(ctx)
 
 		wg.Add(1)
 		go processGetRaw(ctx)
@@ -1129,7 +1154,8 @@ func main() {
 			go checkConnections(ctx, destinations)
 		}
 
-		doReceive(ctx, "/xen/blocks/sync/0.1.0")
+		// doReceive(ctx, "/xen/blocks/sync/0.1.0")
+		streamBlocks(ctx)
 
 		// if len(destinations) > 0 {
 		//	wg.Add(1)
