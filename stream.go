@@ -10,9 +10,11 @@ import (
 	log0 "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"runtime"
 )
 
 type BlockRequest struct {
+	Ack    bool
 	NextId int64 // blockId > 0 or -1 for the next one
 }
 
@@ -25,9 +27,9 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 
 	go func() {
 		logger.Info("Processing requests")
+		acked := true
 		for {
 			str, err := rw.ReadString('\n')
-			logger.Info(str)
 			if err != nil {
 				logger.Warn("read err: ", err)
 				quit <- struct{}{}
@@ -35,30 +37,38 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 			} else {
 				// count += n
 				err = json.Unmarshal([]byte(str), &blockRequest)
-				logger.Debug("REQ: ", blockRequest.NextId)
-				if err != nil {
-					logger.Warn("Error converting data message: ", err)
+				if !blockRequest.Ack && acked {
+					logger.Debug("REQ: ", blockRequest.NextId)
+					if err != nil {
+						logger.Warn("Error converting data message: ", err)
+					} else {
+						if blockRequest.NextId == -1 {
+							nextId += 1
+						} else {
+							nextId = blockRequest.NextId
+						}
+						block, err := getBlock(db, uint(nextId))
+						if err != nil {
+							logger.Warn("Error getting block: ", err)
+							continue
+						}
+						bytes, err := json.Marshal(block)
+						n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+						_ = rw.Flush()
+						if err != nil {
+							logger.Warn("Error sending block: ", err)
+						} else {
+							logger.Infof("SND %d, %d bytes", nextId, n)
+							acked = false
+						}
+					}
+				} else if blockRequest.Ack && !acked {
+					acked = true
 				} else {
-					if blockRequest.NextId == -1 {
-						nextId += 1
-					} else {
-						nextId = blockRequest.NextId
-					}
-					block, err := getBlock(db, uint(nextId))
-					if err != nil {
-						logger.Warn("Error getting block: ", err)
-						continue
-					}
-					bytes, err := json.Marshal(block)
-					n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-					_ = rw.Flush()
-					if err != nil {
-						logger.Warn("Error sending block: ", err)
-					} else {
-						logger.Infof("SND %d, %d bytes", nextId, n)
-					}
+					logger.Warn("Illegal state")
 				}
 			}
+			runtime.Gosched()
 		}
 	}()
 

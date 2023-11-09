@@ -185,22 +185,73 @@ func processBlockHeight(ctx context.Context) {
 			time.Sleep(time.Second)
 
 			var blockRequest BlockRequest
+			var block Block
 
 			for _, blockId := range want {
 				blockRequest = BlockRequest{NextId: int64(blockId)}
 				bytes, err := json.Marshal(blockRequest)
 				if err != nil {
 					logger.Warn("Err in marshall ", err)
-				} else {
-					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-					if err != nil {
-						logger.Warn("Err in write ", err)
-					}
-					_ = rw.Flush()
-					logger.Infof("Requested Block# %d", blockId)
-					// time.Sleep(time.Second)
+					continue
 				}
+
+				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+				if err != nil {
+					logger.Warn("Err in write ", err)
+				}
+				_ = rw.Flush()
+				logger.Infof("Requested Block# %d", blockId)
+				// time.Sleep(time.Second)
+
+				str, err := rw.ReadString('\n')
+				if err != nil {
+					logger.Warn("read err: ", err)
+					continue
+				} else {
+					// count += n
+					err = json.Unmarshal([]byte(str), &block)
+					logger.Debugf("RCV: %d ? %d", block.Id, blockId)
+					if err != nil {
+						logger.Warn("Error converting data message: ", err)
+					} else {
+						if block.Id > 1 {
+							prevBlock, err := getPrevBlock(db, &block)
+							if err != nil {
+								// logger.Warn("Error when processing row: ", err)
+								continue
+							}
+							if prevBlock.BlockHash != block.PrevHash {
+								logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+								continue
+							}
+						}
+						blockIsValid, err := validateBlock(block, logger)
+						if peerId != masterPeerId && blockIsValid {
+							err = insertBlock(db, &block)
+							if err != nil {
+								logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
+							} else {
+								wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
+
+								blockRequest.Ack = true
+								bytes, err := json.Marshal(blockRequest)
+								if err != nil {
+									logger.Warn("Err in marshall ", err)
+									continue
+								}
+
+								_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+								if err != nil {
+									logger.Warn("Err in write ", err)
+								}
+								_ = rw.Flush()
+							}
+						}
+					}
+				}
+				runtime.Gosched()
 			}
+			_ = conn.Close()
 
 			/*
 				msgBytes, err := json.Marshal(want)
