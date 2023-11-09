@@ -173,12 +173,13 @@ func processBlockHeight(ctx context.Context) {
 				want[i] = localHeight + i + 1
 				wantedBlockIds.Set(fmt.Sprintf("%d", localHeight+i+1), true)
 			}
+			logger.Info(want)
+
 			conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
 			if err != nil {
 				logger.Warn("Err in conn ", err)
 				continue
 			}
-
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
 
@@ -1155,7 +1156,8 @@ func main() {
 		}
 
 		// doReceive(ctx, "/xen/blocks/sync/0.1.0")
-		streamBlocks(ctx)
+		wg.Add(1)
+		go streamBlocks(ctx)
 
 		// if len(destinations) > 0 {
 		//	wg.Add(1)
