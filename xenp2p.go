@@ -167,7 +167,7 @@ func processBlockHeight(ctx context.Context) {
 		}
 		if maxBlockHeight > localHeight && peerId != masterPeerId {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
-			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 2_000))
+			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 20))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -190,7 +190,7 @@ func processBlockHeight(ctx context.Context) {
 				if err != nil {
 					logger.Warn("Err in marshall ", err)
 				} else {
-					_, err = rw.Write(bytes)
+					_, err = rw.WriteString(string(bytes))
 					logger.Infof("Requested Block# %d", blockId)
 				}
 			}
