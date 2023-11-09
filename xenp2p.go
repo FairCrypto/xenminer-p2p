@@ -144,6 +144,8 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
+	var receiving = false
+
 	for {
 		msg, err := subs.blockHeight.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
@@ -165,9 +167,9 @@ func processBlockHeight(ctx context.Context) {
 			maxBlockHeight = blockchainHeight
 			logger.Info("MAX HEIGHT: ", maxBlockHeight)
 		}
-		if maxBlockHeight > localHeight && peerId != masterPeerId {
+		if maxBlockHeight > localHeight && peerId != masterPeerId && !receiving {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
-			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 20))
+			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 200))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
@@ -182,7 +184,8 @@ func processBlockHeight(ctx context.Context) {
 			}
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
-			time.Sleep(time.Second)
+			// time.Sleep(time.Second)
+			receiving = true
 
 			var blockRequest BlockRequest
 			var block Block
@@ -200,17 +203,17 @@ func processBlockHeight(ctx context.Context) {
 					logger.Warn("Err in write ", err)
 				}
 				_ = rw.Flush()
-				logger.Infof("Requested Block# %d", blockId)
+				logger.Infof("REQD %d", blockId)
 				// time.Sleep(time.Second)
 
 				str, err := rw.ReadString('\n')
 				if err != nil {
 					logger.Warn("read err: ", err)
-					continue
+					break
 				} else {
 					// count += n
 					err = json.Unmarshal([]byte(str), &block)
-					logger.Debugf("RCV: %d ? %d", block.Id, blockId)
+					logger.Infof("RCVD: %d ? %d", block.Id, blockId)
 					if err != nil {
 						logger.Warn("Error converting data message: ", err)
 					} else {
@@ -252,6 +255,7 @@ func processBlockHeight(ctx context.Context) {
 				runtime.Gosched()
 			}
 			_ = conn.Close()
+			receiving = false
 
 			/*
 				msgBytes, err := json.Marshal(want)

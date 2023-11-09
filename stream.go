@@ -38,7 +38,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 				// count += n
 				err = json.Unmarshal([]byte(str), &blockRequest)
 				if !blockRequest.Ack && acked {
-					logger.Debug("REQ: ", blockRequest.NextId)
+					logger.Infof("ASKD: %d", blockRequest.NextId)
 					if err != nil {
 						logger.Warn("Error converting data message: ", err)
 					} else {
@@ -58,7 +58,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 						if err != nil {
 							logger.Warn("Error sending block: ", err)
 						} else {
-							logger.Infof("SND %d, %d bytes", nextId, n)
+							logger.Infof("SENT %d, %d bytes", nextId, n)
 							acked = false
 						}
 					}
