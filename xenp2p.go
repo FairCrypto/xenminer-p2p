@@ -192,7 +192,7 @@ func processBlockHeight(ctx context.Context) {
 				if err != nil {
 					logger.Warn("Err in marshall ", err)
 				} else {
-					_, err = rw.WriteString(string(bytes))
+					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 					logger.Infof("Requested Block# %d", blockId)
 					time.Sleep(time.Second)
 				}
@@ -1158,8 +1158,8 @@ func main() {
 		}
 
 		// doReceive(ctx, "/xen/blocks/sync/0.1.0")
-		wg.Add(1)
-		go streamBlocks(ctx)
+		// wg.Add(1)
+		streamBlocks(ctx)
 
 		// if len(destinations) > 0 {
 		//	wg.Add(1)

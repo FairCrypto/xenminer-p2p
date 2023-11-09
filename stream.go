@@ -21,6 +21,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 	nextId := int64(0)
 
 	go func() {
+		logger.Info("Processing requests")
 		for {
 			str, err := rw.ReadString('\n')
 			if err != nil {
