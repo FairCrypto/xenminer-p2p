@@ -193,8 +193,12 @@ func processBlockHeight(ctx context.Context) {
 					logger.Warn("Err in marshall ", err)
 				} else {
 					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+					if err != nil {
+						logger.Warn("Err in write ", err)
+					}
+					_ = rw.Flush()
 					logger.Infof("Requested Block# %d", blockId)
-					time.Sleep(time.Second)
+					// time.Sleep(time.Second)
 				}
 			}
 

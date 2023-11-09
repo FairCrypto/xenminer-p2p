@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	log0 "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -20,17 +21,19 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 	quit := make(chan struct{})
 	nextId := int64(0)
 
+	var blockRequest BlockRequest
+
 	go func() {
 		logger.Info("Processing requests")
 		for {
 			str, err := rw.ReadString('\n')
+			logger.Info(str)
 			if err != nil {
 				logger.Warn("read err: ", err)
 				quit <- struct{}{}
 				return
 			} else {
 				// count += n
-				var blockRequest BlockRequest
 				err = json.Unmarshal([]byte(str), &blockRequest)
 				logger.Debug("REQ: ", blockRequest.NextId)
 				if err != nil {
@@ -47,7 +50,8 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 						continue
 					}
 					bytes, err := json.Marshal(block)
-					n, err := rw.WriteString(string(bytes))
+					n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+					_ = rw.Flush()
 					if err != nil {
 						logger.Warn("Error sending block: ", err)
 					} else {
