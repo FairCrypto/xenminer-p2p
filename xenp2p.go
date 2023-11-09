@@ -182,10 +182,11 @@ func processBlockHeight(ctx context.Context) {
 			}
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
+			time.Sleep(time.Second)
 
 			var blockRequest BlockRequest
 
-			for blockId := range want {
+			for _, blockId := range want {
 				blockRequest = BlockRequest{NextId: int64(blockId)}
 				bytes, err := json.Marshal(blockRequest)
 				if err != nil {
@@ -193,6 +194,7 @@ func processBlockHeight(ctx context.Context) {
 				} else {
 					_, err = rw.WriteString(string(bytes))
 					logger.Infof("Requested Block# %d", blockId)
+					time.Sleep(time.Second)
 				}
 			}
 

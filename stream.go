@@ -57,11 +57,9 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 		}
 	}()
 
-	for {
-		select {
-		case <-quit:
-			return errors.New("stopped")
-		}
+	select {
+	case <-quit:
+		return errors.New("stopped")
 	}
 
 }
