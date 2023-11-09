@@ -213,19 +213,22 @@ func processBlockHeight(ctx context.Context) {
 				} else {
 					// count += n
 					err = json.Unmarshal([]byte(str), &block)
-					logger.Infof("RCVD: %d ? %d", block.Id, blockId)
 					if err != nil {
 						logger.Warn("Error converting data message: ", err)
 					} else {
+						if blockId != blockId {
+							logger.Warnf("CHCK: %d <> %d", block.Id, blockId)
+							break
+						}
 						if block.Id > 1 {
 							prevBlock, err := getPrevBlock(db, &block)
 							if err != nil {
 								// logger.Warn("Error when processing row: ", err)
-								continue
+								break
 							}
 							if prevBlock.BlockHash != block.PrevHash {
 								logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
-								continue
+								break
 							}
 						}
 						blockIsValid, err := validateBlock(block, logger)
@@ -235,17 +238,17 @@ func processBlockHeight(ctx context.Context) {
 								logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
 							} else {
 								wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
-
+								logger.Infof("%d < %s", block.Id, msg.GetFrom())
 								blockRequest.Ack = true
 								bytes, err := json.Marshal(blockRequest)
 								if err != nil {
 									logger.Warn("Err in marshall ", err)
-									continue
+									break
 								}
-
 								_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 								if err != nil {
 									logger.Warn("Err in write ", err)
+									break
 								}
 								_ = rw.Flush()
 							}

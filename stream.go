@@ -10,6 +10,7 @@ import (
 	log0 "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"runtime"
 )
 
@@ -18,7 +19,7 @@ type BlockRequest struct {
 	NextId int64 // blockId > 0 or -1 for the next one
 }
 
-func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.EventLogger) error {
+func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
 	quit := make(chan struct{})
 	nextId := int64(0)
@@ -58,7 +59,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, logger log0.Event
 						if err != nil {
 							logger.Warn("Error sending block: ", err)
 						} else {
-							logger.Infof("SENT %d, %d bytes", nextId, n)
+							logger.Infof("%d (%d bytes) > %s", nextId, n, id)
 							acked = false
 						}
 					}
@@ -84,14 +85,14 @@ func streamBlocks(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 
 	h.SetStreamHandler("/xen/blocks/sync/0.1.0", func(s network.Stream) {
-		logger.Info("listener received new stream", s.Stat())
+		logger.Infof("Received new stream from: %s", s.Conn().RemotePeer())
 		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 		logger.Debug("Reading stream")
 		// err := decode(rw, logger)
-		err := decodeRequests(ctx, rw, logger)
-		logger.Info("Stream err: ", err)
+		err := decodeRequests(ctx, rw, s.Conn().RemotePeer(), logger)
+		logger.Info("Stream: ", err)
 	})
-	logger.Info("Listening")
+	logger.Info("Listening to incoming requests")
 
 	<-ctx.Done()
 }
