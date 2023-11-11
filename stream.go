@@ -125,7 +125,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				}
 				logger.Infof("ASKD: %d -> %d", blockRequest.NextId, nextId)
 
-				blocks := make([]Block, xSyncRequest.BatchSize)
+				var blocks []Block
 				firstId := nextId
 				for i := 0; i < int(xSyncRequest.BatchSize); i++ {
 					block, err := getBlock(db, uint(nextId))
