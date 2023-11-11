@@ -134,7 +134,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 						quit <- struct{}{}
 						return
 					}
-					logger.Infof("Packed block %d", nextId)
+					logger.Infof("Packed block %d %d", nextId, block.Id)
 					blocks = append(blocks, *block)
 					nextId += 1
 				}
