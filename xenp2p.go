@@ -280,7 +280,7 @@ func processBlockHeight(ctx context.Context) {
 				for _, block := range blocks {
 					prevBlock, err := getPrevBlock(db, &block)
 					if err != nil {
-						logger.Warn("Error getting prev block: ", err)
+						logger.Warnf("Error getting prev block $d: ", block.Id, err)
 						innerErr = true
 						break
 					}

@@ -97,6 +97,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			return
 		}
 		logger.Infof("NEGD %s", xSyncRequest)
+		nextId = int64(xSyncRequest.FromId) - 1
 
 		acked := true
 		for {
@@ -106,20 +107,24 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				quit <- struct{}{}
 				return
 			}
-			// count += n
+			logger.Infof("???: %d", len(str))
 			err = json.Unmarshal([]byte(str), &blockRequest)
 			if err != nil {
+				if len(str) == 1 {
+					continue
+				}
 				logger.Warn("Error converting data message: ", err, str)
 				quit <- struct{}{}
 				return
 			}
 			if !blockRequest.Ack && acked {
-				logger.Infof("ASKD: %d", blockRequest.NextId)
 				if blockRequest.NextId == -1 {
 					nextId += 1
 				} else {
 					nextId = blockRequest.NextId
 				}
+				logger.Infof("ASKD: %d -> %d", blockRequest.NextId, nextId)
+
 				blocks := make([]Block, xSyncRequest.BatchSize)
 				firstId := nextId
 				for i := 0; i < int(xSyncRequest.BatchSize); i++ {
@@ -129,6 +134,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 						quit <- struct{}{}
 						return
 					}
+					logger.Infof("Packed block %d", nextId)
 					blocks = append(blocks, *block)
 					nextId += 1
 				}
