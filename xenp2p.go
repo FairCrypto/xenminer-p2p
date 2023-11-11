@@ -276,7 +276,7 @@ func processBlockHeight(ctx context.Context) {
 					logger.Warn("Error converting data message: ", err)
 					break
 				}
-				logger.Infof("Received %d blocks (%d bytes)", len(blocks), len(str))
+				logger.Infof("Received %d blocks (%d bytes)", len(blocks), len(str), blocks[0])
 				innerErr := false
 				for _, block := range blocks {
 					prevBlock, err := getPrevBlock(db, &block)
