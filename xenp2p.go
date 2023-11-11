@@ -200,7 +200,7 @@ func processBlockHeight(ctx context.Context) {
 				ToId:      uint64(maxBlockHeight),
 			}
 
-			xSyncBytes, err := json.Marshal(xSyncRequest)
+			xSyncBytes, err := json.Marshal(&xSyncRequest)
 			if err != nil {
 				logger.Warn("Err in marshal ", err)
 				continue
@@ -232,6 +232,7 @@ func processBlockHeight(ctx context.Context) {
 				logger.Warn("XSync params don't fit; aborting XSync")
 				continue
 			}
+			logger.Infof("ACKD %s", xSyncRequest)
 			_, err = rw.WriteString(fmt.Sprintf("%s\n", ackedReqStr))
 			if err != nil {
 				logger.Warn("Err in write ", err)
@@ -251,7 +252,7 @@ func processBlockHeight(ctx context.Context) {
 			for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
 
 				blockRequest = BlockRequest{NextId: int64(-1), SeqNo: batchNo, Ack: false}
-				bytes, err := json.Marshal(blockRequest)
+				bytes, err := json.Marshal(&blockRequest)
 				if err != nil {
 					logger.Warn("Err in marshall ", err)
 					break
@@ -259,6 +260,7 @@ func processBlockHeight(ctx context.Context) {
 				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 				if err != nil {
 					logger.Warn("Err in write ", err)
+					break
 				}
 				_ = rw.Flush()
 				logger.Infof("REQD %d", blockRequest)
@@ -268,47 +270,54 @@ func processBlockHeight(ctx context.Context) {
 				if err != nil {
 					logger.Warn("read err: ", err)
 					break
-				} else {
-					// count += n
-					err = json.Unmarshal([]byte(str), &blocks)
+				}
+				err = json.Unmarshal([]byte(str), &blocks)
+				if err != nil {
+					logger.Warn("Error converting data message: ", err)
+					break
+				}
+				innerErr := false
+				for _, block := range blocks {
+					prevBlock, err := getPrevBlock(db, &block)
 					if err != nil {
-						logger.Warn("Error converting data message: ", err)
+						logger.Warn("Error getting prev block: ", err)
+						innerErr = true
 						break
 					}
-					for _, block := range blocks {
-						prevBlock, err := getPrevBlock(db, &block)
+					if prevBlock.BlockHash != block.PrevHash {
+						logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+						innerErr = true
+						break
+					}
+					blockIsValid, err := validateBlock(block, logger)
+					if peerId != masterPeerId && blockIsValid {
+						err = insertBlock(db, &block)
 						if err != nil {
-							logger.Warn("Error getting prev block: ", err)
+							logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
+							innerErr = true
 							break
-						}
-						if prevBlock.BlockHash != block.PrevHash {
-							logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
-							break
-						}
-
-						blockIsValid, err := validateBlock(block, logger)
-						if peerId != masterPeerId && blockIsValid {
-							err = insertBlock(db, &block)
+						} else {
+							wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
+							logger.Infof("%d < %s", block.Id, msg.GetFrom())
+							blockRequest.Ack = true
+							bytes, err := json.Marshal(blockRequest)
 							if err != nil {
-								logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
-							} else {
-								wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
-								logger.Infof("%d < %s", block.Id, msg.GetFrom())
-								blockRequest.Ack = true
-								bytes, err := json.Marshal(blockRequest)
-								if err != nil {
-									logger.Warn("Err in marshall ", err)
-									break
-								}
-								_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-								if err != nil {
-									logger.Warn("Err in write ", err)
-									break
-								}
-								_ = rw.Flush()
+								logger.Warn("Err in marshall ", err)
+								innerErr = true
+								break
 							}
+							_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+							if err != nil {
+								logger.Warn("Err in write ", err)
+								innerErr = true
+								break
+							}
+							_ = rw.Flush()
 						}
 					}
+				}
+				if innerErr {
+					break
 				}
 				runtime.Gosched()
 			}

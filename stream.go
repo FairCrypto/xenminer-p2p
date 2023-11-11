@@ -69,7 +69,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			xSyncRequest.BatchSize = uint32(blockBatchSize)
 		}
 		xSyncRequest.Ack = true
-		xSyncBytes, err := json.Marshal(xSyncRequest)
+		xSyncBytes, err := json.Marshal(&xSyncRequest)
 		if err != nil {
 			logger.Warn("Err in marshal ", err)
 			quit <- struct{}{}
@@ -91,7 +91,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		}
 		err = json.Unmarshal([]byte(confirmedReqStr), &xSyncRequest)
 		if err != nil {
-			logger.Warn("Err in unmarshall: ", err)
+			logger.Warn("Err in unmarshal: ", err)
 			quit <- struct{}{}
 			return
 		}
@@ -130,7 +130,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 					blocks = append(blocks, *block)
 					nextId += 1
 				}
-				bytes, err := json.Marshal(blocks)
+				bytes, err := json.Marshal(&blocks)
 				n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 				_ = rw.Flush()
 				if err != nil {
