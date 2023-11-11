@@ -245,7 +245,7 @@ func processBlockHeight(ctx context.Context) {
 
 			delta = uint(xSyncRequest.ToId - xSyncRequest.FromId)
 			var blockRequest BlockRequest
-			blocks := make([]Block, xSyncRequest.BatchSize)
+			var blocks []Block
 
 			totalBatches := uint32(math.Ceil(float64(delta / uint(xSyncRequest.BatchSize))))
 
