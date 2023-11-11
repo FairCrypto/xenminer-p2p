@@ -127,6 +127,9 @@ type NetworkState struct {
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
+const blockSyncProto = "/xen/blocks/sync/0.1.1"
+const maxDeltaLen = 200
+const blockBatchSize = 20
 
 // const yieldTime = 100 * time.Millisecond
 
@@ -144,6 +147,7 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
+	var negotiating = false
 	var receiving = false
 
 	for {
@@ -167,17 +171,17 @@ func processBlockHeight(ctx context.Context) {
 			maxBlockHeight = blockchainHeight
 			logger.Info("MAX HEIGHT: ", maxBlockHeight)
 		}
-		if maxBlockHeight > localHeight && peerId != masterPeerId && !receiving {
+		if maxBlockHeight > localHeight && peerId != masterPeerId && !receiving && !negotiating {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
-			delta := uint(math.Min(float64(maxBlockHeight-localHeight), 200))
+			delta := uint(math.Min(float64(maxBlockHeight-localHeight), maxDeltaLen))
 			want := make([]uint, delta)
 			for i := uint(0); i < delta; i++ {
 				want[i] = localHeight + i + 1
 				wantedBlockIds.Set(fmt.Sprintf("%d", localHeight+i+1), true)
 			}
-			logger.Info(want)
+			logger.Infof("WANT: %d", delta)
 
-			conn, err := h.NewStream(ctx, msg.GetFrom(), "/xen/blocks/sync/0.1.0")
+			conn, err := h.NewStream(ctx, msg.GetFrom(), blockSyncProto)
 			if err != nil {
 				logger.Warn("Err in conn ", err)
 				continue
@@ -185,25 +189,79 @@ func processBlockHeight(ctx context.Context) {
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
 			// time.Sleep(time.Second)
+
+			negotiating = true
+			// receiving = true
+
+			var xSyncRequest XSyncRequest = XSyncRequest{
+				Ack:       false,
+				BatchSize: blockBatchSize,
+				FromId:    uint64(localHeight) + 1,
+				ToId:      uint64(maxBlockHeight),
+			}
+
+			xSyncBytes, err := json.Marshal(xSyncRequest)
+			if err != nil {
+				logger.Warn("Err in marshal ", err)
+				continue
+			}
+			_, err = rw.WriteString(fmt.Sprintf("%s\n", string(xSyncBytes)))
+			if err != nil {
+				logger.Warn("Err in write ", err)
+				continue
+			}
+			_ = rw.Flush()
+			logger.Infof("REQD %s", xSyncRequest)
+			ackedReqStr, err := rw.ReadString('\n')
+			if err != nil {
+				logger.Warn("read err: ", err)
+				continue
+			}
+			err = json.Unmarshal([]byte(ackedReqStr), &xSyncRequest)
+			if err != nil {
+				logger.Warn("Err in unmarshall: ", err)
+				continue
+			}
+			if !xSyncRequest.Ack {
+				logger.Warn("No Ack; aborting XSync")
+				continue
+			}
+			if xSyncRequest.BatchSize < 1 ||
+				xSyncRequest.FromId != uint64(localHeight)+1 ||
+				xSyncRequest.ToId <= uint64(localHeight) {
+				logger.Warn("XSync params don't fit; aborting XSync")
+				continue
+			}
+			_, err = rw.WriteString(fmt.Sprintf("%s\n", ackedReqStr))
+			if err != nil {
+				logger.Warn("Err in write ", err)
+				continue
+			}
+			_ = rw.Flush()
+
+			negotiating = false
 			receiving = true
 
+			delta = uint(xSyncRequest.ToId - xSyncRequest.FromId)
 			var blockRequest BlockRequest
-			var block Block
+			blocks := make([]Block, xSyncRequest.BatchSize)
 
-			for _, blockId := range want {
-				blockRequest = BlockRequest{NextId: int64(blockId)}
+			totalBatches := uint32(math.Ceil(float64(delta / uint(xSyncRequest.BatchSize))))
+
+			for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
+
+				blockRequest = BlockRequest{NextId: int64(-1), SeqNo: batchNo, Ack: false}
 				bytes, err := json.Marshal(blockRequest)
 				if err != nil {
 					logger.Warn("Err in marshall ", err)
-					continue
+					break
 				}
-
 				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 				if err != nil {
 					logger.Warn("Err in write ", err)
 				}
 				_ = rw.Flush()
-				logger.Infof("REQD %d", blockId)
+				logger.Infof("REQD %d", blockRequest)
 				// time.Sleep(time.Second)
 
 				str, err := rw.ReadString('\n')
@@ -212,25 +270,22 @@ func processBlockHeight(ctx context.Context) {
 					break
 				} else {
 					// count += n
-					err = json.Unmarshal([]byte(str), &block)
+					err = json.Unmarshal([]byte(str), &blocks)
 					if err != nil {
 						logger.Warn("Error converting data message: ", err)
-					} else {
-						if blockId != blockId {
-							logger.Warnf("CHCK: %d <> %d", block.Id, blockId)
+						break
+					}
+					for _, block := range blocks {
+						prevBlock, err := getPrevBlock(db, &block)
+						if err != nil {
+							logger.Warn("Error getting prev block: ", err)
 							break
 						}
-						if block.Id > 1 {
-							prevBlock, err := getPrevBlock(db, &block)
-							if err != nil {
-								// logger.Warn("Error when processing row: ", err)
-								break
-							}
-							if prevBlock.BlockHash != block.PrevHash {
-								logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
-								break
-							}
+						if prevBlock.BlockHash != block.PrevHash {
+							logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+							break
 						}
+
 						blockIsValid, err := validateBlock(block, logger)
 						if peerId != masterPeerId && blockIsValid {
 							err = insertBlock(db, &block)
