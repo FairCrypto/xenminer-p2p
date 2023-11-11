@@ -52,6 +52,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			quit <- struct{}{}
 			return
 		}
+		logger.Infof("RCVD %s", xSyncRequest)
 		if xSyncRequest.Ack {
 			logger.Warn("illegal state: ack=true")
 			quit <- struct{}{}
@@ -95,6 +96,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			quit <- struct{}{}
 			return
 		}
+		logger.Infof("NEGD %s", xSyncRequest)
 
 		acked := true
 		for {
@@ -106,13 +108,13 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			}
 			// count += n
 			err = json.Unmarshal([]byte(str), &blockRequest)
+			if err != nil {
+				logger.Warn("Error converting data message: ", err, str)
+				quit <- struct{}{}
+				return
+			}
 			if !blockRequest.Ack && acked {
 				logger.Infof("ASKD: %d", blockRequest.NextId)
-				if err != nil {
-					logger.Warn("Error converting data message: ", err)
-					quit <- struct{}{}
-					return
-				}
 				if blockRequest.NextId == -1 {
 					nextId += 1
 				} else {
