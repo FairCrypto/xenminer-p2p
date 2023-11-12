@@ -147,10 +147,11 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
+	quit := make(chan struct{})
 	xSyncChan := make(chan XSyncMessage)
+
 	var xSyncRequest XSyncMessage
 	var negotiatedBatchCount = uint32(blockBatchSize)
-
 	var receiving = false
 
 	for {
@@ -235,9 +236,15 @@ func processBlockHeight(ctx context.Context) {
 					}
 					xSyncChan <- xSyncRequest
 				}
+				_ = conn.Close()
+				receiving = false
+				quit <- struct{}{}
 			}()
 
 			select {
+			case <-quit:
+				// _ = conn.Close()
+				break
 			case xMsg := <-xSyncChan:
 				switch xMsg.Type {
 				case setupAck:
