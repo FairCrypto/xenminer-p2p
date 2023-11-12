@@ -33,19 +33,6 @@ type XSyncMessage struct {
 	Blocks []Block
 }
 
-type XSyncRequest struct {
-	Ack       bool
-	BatchSize uint32
-	FromId    uint64 // blockId > 0 or -1 for the next one
-	ToId      uint64
-}
-
-type BlockRequest struct {
-	Ack    bool
-	SeqNo  uint32
-	NextId int64 // blockId > 0 or -1 for the next one
-}
-
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
 	quit := make(chan string)
