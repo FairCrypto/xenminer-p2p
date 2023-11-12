@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"runtime"
 )
 
 type XSyncMessageType int
@@ -79,74 +78,75 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				return
 			}
 			xSyncChan <- xSyncRequest
-			runtime.Gosched()
+			// runtime.Gosched()
 		}
 	}()
 
-	select {
-	case msg := <-xSyncChan:
-		switch msg.Type {
-		case setupReq:
-			logger.Infof("RCVD %s", msg)
-			if msg.FromId > uint64(localHeight) {
-				processProtocolError("illegal ask: > max_height")
-			}
-			if msg.ToId > uint64(localHeight) {
-				msg.ToId = uint64(localHeight)
-			}
-			if msg.Count > blockBatchSize {
-				msg.Count = uint32(blockBatchSize)
-			}
-			msg.Type = setupAck
-			bytes, err := json.Marshal(&msg)
-			if err != nil {
-				processMarshalError(err)
-			}
-			_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-			if err != nil {
-				processWriteError(err)
-			}
-			_ = rw.Flush()
-			logger.Infof("ACKD %s", msg)
-
-		case setupCnf:
-			nextId = int64(msg.FromId) - 1
-			logger.Infof("NEGD %s", msg)
-
-		case blocksReq:
-			if msg.FromId == 0 {
-				nextId += 1
-			} else {
-				nextId = int64(msg.FromId)
-			}
-			logger.Infof("ASKD: %d -> %d", msg.FromId, nextId)
-			msg.Type = blocksResp
-			firstId := nextId
-			for i := 0; i < int(msg.Count); i++ {
-				block, err := getBlock(db, uint(nextId))
-				if err != nil {
-					logger.Warn("Error getting block: ", err)
-					quit <- "error getting block"
+	for {
+		select {
+		case msg := <-xSyncChan:
+			switch msg.Type {
+			case setupReq:
+				logger.Infof("RCVD %s", msg)
+				if msg.FromId > uint64(localHeight) {
+					processProtocolError("illegal ask: > max_height")
 				}
-				logger.Infof("Packed block %d %d", nextId, block.Id)
-				msg.Blocks = append(msg.Blocks, *block)
-				nextId += 1
+				if msg.ToId > uint64(localHeight) {
+					msg.ToId = uint64(localHeight)
+				}
+				if msg.Count > blockBatchSize {
+					msg.Count = uint32(blockBatchSize)
+				}
+				msg.Type = setupAck
+				bytes, err := json.Marshal(&msg)
+				if err != nil {
+					processMarshalError(err)
+				}
+				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+				if err != nil {
+					processWriteError(err)
+				}
+				_ = rw.Flush()
+				logger.Infof("ACKD %s", msg)
+
+			case setupCnf:
+				// nextId = int64(msg.FromId) - 1
+				logger.Infof("NEGD %s", msg)
+
+			case blocksReq:
+				if msg.FromId == 0 {
+					nextId += 1
+				} else {
+					nextId = int64(msg.FromId)
+				}
+				logger.Infof("ASKD: %d -> %d", msg.FromId, nextId)
+				msg.Type = blocksResp
+				firstId := nextId
+				for i := 0; i < int(msg.Count); i++ {
+					block, err := getBlock(db, uint(nextId))
+					if err != nil {
+						logger.Warn("Error getting block: ", err)
+						quit <- "error getting block"
+					}
+					logger.Infof("Packed block %d %d", nextId, block.Id)
+					msg.Blocks = append(msg.Blocks, *block)
+					nextId += 1
+				}
+				bytes, err := json.Marshal(&msg)
+				n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+				_ = rw.Flush()
+				if err != nil {
+					processWriteError(err)
+				} else {
+					logger.Infof("%d...%d (%d bytes) > %s", firstId, nextId, n, id)
+				}
 			}
-			bytes, err := json.Marshal(&msg)
-			n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-			_ = rw.Flush()
-			if err != nil {
-				processWriteError(err)
-			} else {
-				logger.Infof("%d...%d (%d bytes) > %s", firstId, nextId, n, id)
-			}
+
+		case <-quit:
+			return errors.New("stopped")
 		}
-		return nil
 
-	case <-quit:
-		return errors.New("stopped")
 	}
-
 }
 
 func streamBlocks(ctx context.Context) {

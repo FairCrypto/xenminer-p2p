@@ -242,7 +242,7 @@ func processBlockHeight(ctx context.Context) {
 			case xMsg := <-xSyncChan:
 				switch xMsg.Type {
 				case setupAck:
-					logger.Infof("ACKD %s", msg)
+					logger.Infof("ACKD %s", xMsg)
 					xMsg.Type = setupCnf
 					bytes, err := json.Marshal(&xMsg)
 					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
