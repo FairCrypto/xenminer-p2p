@@ -110,12 +110,12 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				logger.Infof("ACKD %s", msg)
 
 			case setupCnf:
-				nextId = int64(msg.FromId) - 1
+				nextId = int64(msg.FromId)
 				logger.Infof("NEGD %s", msg)
 
 			case blocksReq:
 				if msg.FromId == 0 {
-					nextId += 1
+					// nextId += 1
 				} else {
 					nextId = int64(msg.FromId)
 				}
@@ -128,7 +128,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 						logger.Warn("Error getting block: ", err)
 						quit <- "error getting block"
 					}
-					logger.Infof("Packed block %d %d", nextId, block.Id)
+					logger.Debugf("Packed block %d %d", nextId, block.Id)
 					msg.Blocks = append(msg.Blocks, *block)
 					nextId += 1
 				}
