@@ -244,7 +244,7 @@ func processBlockHeight(ctx context.Context) {
 				case setupAck:
 					logger.Infof("ACKD %s", msg)
 					xMsg.Type = setupCnf
-					bytes, err := json.Marshal(&msg)
+					bytes, err := json.Marshal(&xMsg)
 					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 					if err != nil {
 						logger.Warn("Err in write ", err)

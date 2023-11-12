@@ -39,7 +39,6 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	nextId := int64(0)
 	localHeight := getCurrentHeight(db)
 	xSyncChan := make(chan XSyncMessage)
-	var xSyncRequest XSyncMessage
 
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
@@ -63,6 +62,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	}
 
 	go func() {
+		var xSyncRequest XSyncMessage
 		logger.Info("Processing requests")
 		for {
 			str, err := rw.ReadString('\n')
