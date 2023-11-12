@@ -242,8 +242,8 @@ func processBlockHeight(ctx context.Context) {
 					}
 					xSyncChan <- xSyncRequest
 				}
-				quit <- struct{}{}
 				err = conn.Close()
+				quit <- struct{}{}
 				logger.Info("Stopping the receiver", err)
 				receiving = false
 			}()
