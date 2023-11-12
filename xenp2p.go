@@ -253,91 +253,93 @@ func processBlockHeight(ctx context.Context) {
 				return
 			}()
 
-			for {
-				select {
-				case <-quit:
-					logger.Info("Quitting the proto")
-					_ = conn.Close()
-					receiving = false
-					break
-				case xMsg := <-xSyncChan:
-					logger.Infof("inc msg %s", xMsg.Type)
-					switch xMsg.Type {
-					case setupAck:
-						logger.Infof("ACKD %s", xMsg)
-						negotiatedBatchCount = xMsg.Count
-						xMsg.Type = setupCnf
-						bytes, err := json.Marshal(&xMsg)
-						_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-						if err != nil {
-							logger.Warn("Err in write ", err)
-							continue
-						}
-						_ = rw.Flush()
-
-						delta = uint(xMsg.ToId - xMsg.FromId)
-						// totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
-						totalBatches := int32(2)
-						logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
-
-						for batchNo := int32(0); batchNo < totalBatches; batchNo++ {
-							xSyncRequest = XSyncMessage{
-								Count:  negotiatedBatchCount,
-								FromId: uint64(0),
-								ToId:   uint64(0),
-								SeqNo:  batchNo,
-								Type:   blocksReq,
-								Blocks: make([]Block, 0),
-							}
-							if batchNo+1 == totalBatches {
-								xSyncRequest.SeqNo = -1
-							}
-							bytes, err := json.Marshal(&xSyncRequest)
-							if err != nil {
-								logger.Warn("Err in marshall ", err)
-								break
-							}
+			go func() {
+				for {
+					select {
+					case <-quit:
+						logger.Info("Quitting the proto")
+						_ = conn.Close()
+						receiving = false
+						return
+					case xMsg := <-xSyncChan:
+						logger.Infof("inc msg %s", xMsg.Type)
+						switch xMsg.Type {
+						case setupAck:
+							logger.Infof("ACKD %s", xMsg)
+							negotiatedBatchCount = xMsg.Count
+							xMsg.Type = setupCnf
+							bytes, err := json.Marshal(&xMsg)
 							_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 							if err != nil {
 								logger.Warn("Err in write ", err)
-								break
+								continue
 							}
 							_ = rw.Flush()
-							logger.Infof("BREQ %d", xSyncRequest)
-						}
 
-					case blocksResp:
-						logger.Infof("Received %d blocks (seq=%d)", len(xMsg.Blocks), xMsg.SeqNo)
-						for _, block := range xMsg.Blocks {
-							prevBlock, err := getPrevBlock(db, &block)
-							if err != nil {
-								logger.Warnf("Error getting prev block $d: ", block.Id, err)
-								break
-							}
-							if prevBlock.BlockHash != block.PrevHash {
-								logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
-								break
-							}
-							blockIsValid, err := validateBlock(block, logger)
-							if peerId != masterPeerId && blockIsValid {
-								err = insertBlock(db, &block)
+							delta = uint(xMsg.ToId - xMsg.FromId)
+							// totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
+							totalBatches := int32(2)
+							logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
+
+							for batchNo := int32(0); batchNo < totalBatches; batchNo++ {
+								xSyncRequest = XSyncMessage{
+									Count:  negotiatedBatchCount,
+									FromId: uint64(0),
+									ToId:   uint64(0),
+									SeqNo:  batchNo,
+									Type:   blocksReq,
+									Blocks: make([]Block, 0),
+								}
+								if batchNo+1 == totalBatches {
+									xSyncRequest.SeqNo = -1
+								}
+								bytes, err := json.Marshal(&xSyncRequest)
 								if err != nil {
-									logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
+									logger.Warn("Err in marshall ", err)
 									break
-								} else {
-									wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
-									logger.Infof("%d < %s", block.Id, msg.GetFrom())
+								}
+								_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+								if err != nil {
+									logger.Warn("Err in write ", err)
+									break
+								}
+								_ = rw.Flush()
+								logger.Infof("BREQ %d", xSyncRequest)
+							}
+
+						case blocksResp:
+							logger.Infof("Received %d blocks (seq=%d)", len(xMsg.Blocks), xMsg.SeqNo)
+							for _, block := range xMsg.Blocks {
+								prevBlock, err := getPrevBlock(db, &block)
+								if err != nil {
+									logger.Warnf("Error getting prev block $d: ", block.Id, err)
+									break
+								}
+								if prevBlock.BlockHash != block.PrevHash {
+									logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+									break
+								}
+								blockIsValid, err := validateBlock(block, logger)
+								if peerId != masterPeerId && blockIsValid {
+									err = insertBlock(db, &block)
+									if err != nil {
+										logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
+										break
+									} else {
+										wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
+										logger.Infof("%d < %s", block.Id, msg.GetFrom())
+									}
 								}
 							}
-						}
-						if xMsg.SeqNo == -1 {
-							logger.Info("Complete")
-							quit <- struct{}{}
+							if xMsg.SeqNo == -1 {
+								logger.Info("Complete")
+								quit <- struct{}{}
+							}
 						}
 					}
+					runtime.Gosched()
 				}
-				runtime.Gosched()
-			}
+			}()
 		}
 
 		if maxBlockHeight == localHeight {
