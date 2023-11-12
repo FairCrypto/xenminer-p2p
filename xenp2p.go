@@ -254,6 +254,7 @@ func processBlockHeight(ctx context.Context) {
 
 					delta = uint(xMsg.ToId - xMsg.FromId)
 					totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
+					logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
 
 					for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
 						xSyncRequest = XSyncMessage{
