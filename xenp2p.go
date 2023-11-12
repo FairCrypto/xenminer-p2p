@@ -196,9 +196,11 @@ func processBlockHeight(ctx context.Context) {
 
 			xSyncRequest = XSyncMessage{
 				Type:   setupReq,
+				SeqNo:  0,
 				Count:  blockBatchSize,
 				FromId: uint64(localHeight) + 1,
 				ToId:   uint64(maxBlockHeight),
+				Blocks: make([]Block, 0),
 			}
 
 			xSyncBytes, err := json.Marshal(&xSyncRequest)
@@ -256,8 +258,10 @@ func processBlockHeight(ctx context.Context) {
 					for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
 						xSyncRequest = XSyncMessage{
 							FromId: uint64(0),
+							ToId:   uint64(0),
 							SeqNo:  batchNo,
 							Type:   blocksReq,
+							Blocks: make([]Block, 0),
 						}
 						bytes, err := json.Marshal(&xSyncRequest)
 						if err != nil {

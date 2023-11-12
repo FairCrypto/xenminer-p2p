@@ -120,8 +120,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				nextId = int64(msg.FromId)
 			}
 			logger.Infof("ASKD: %d -> %d", msg.FromId, nextId)
-
-			var blocks []Block
+			msg.Type = blocksResp
 			firstId := nextId
 			for i := 0; i < int(msg.Count); i++ {
 				block, err := getBlock(db, uint(nextId))
@@ -130,10 +129,10 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 					quit <- "error getting block"
 				}
 				logger.Infof("Packed block %d %d", nextId, block.Id)
-				blocks = append(blocks, *block)
+				msg.Blocks = append(msg.Blocks, *block)
 				nextId += 1
 			}
-			bytes, err := json.Marshal(&blocks)
+			bytes, err := json.Marshal(&msg)
 			n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
 			_ = rw.Flush()
 			if err != nil {
