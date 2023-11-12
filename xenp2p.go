@@ -252,7 +252,7 @@ func processBlockHeight(ctx context.Context) {
 			select {
 			case <-quit:
 				logger.Info("Quitting the proto")
-				// _ = conn.Close()
+				_ = conn.Close()
 				break
 			case xMsg := <-xSyncChan:
 				switch xMsg.Type {
@@ -298,7 +298,7 @@ func processBlockHeight(ctx context.Context) {
 					}
 
 				case blocksResp:
-					logger.Infof("Received %d blocks", len(xMsg.Blocks))
+					logger.Infof("Received %d blocks (seq=%d)", len(xMsg.Blocks), xMsg.SeqNo)
 					for _, block := range xMsg.Blocks {
 						prevBlock, err := getPrevBlock(db, &block)
 						if err != nil {
