@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"runtime"
 )
 
 type XSyncMessageType int
@@ -79,7 +80,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				return
 			}
 			xSyncChan <- xSyncRequest
-			// runtime.Gosched()
+			runtime.Gosched()
 		}
 	}()
 
@@ -149,7 +150,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		case err := <-quitWithError:
 			return err
 		}
-
+		runtime.Gosched()
 	}
 }
 

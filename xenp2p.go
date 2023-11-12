@@ -241,6 +241,7 @@ func processBlockHeight(ctx context.Context) {
 						// break
 					}
 					xSyncChan <- xSyncRequest
+					runtime.Gosched()
 				}
 				err = conn.Close()
 				quit <- struct{}{}
