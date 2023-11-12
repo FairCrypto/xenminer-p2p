@@ -257,6 +257,7 @@ func processBlockHeight(ctx context.Context) {
 				case <-quit:
 					logger.Info("Quitting the proto")
 					_ = conn.Close()
+					receiving = false
 					break
 				case xMsg := <-xSyncChan:
 					logger.Infof("inc msg %s", xMsg.Type)
