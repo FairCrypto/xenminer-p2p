@@ -237,7 +237,7 @@ func processBlockHeight(ctx context.Context) {
 						// break
 					}
 					if xSyncRequest.ToId <= uint64(localHeight) {
-						logger.Warn("XSync params don't fit: to=%d > local:%d", xSyncRequest.ToId, localHeight)
+						logger.Warn("XSync params don't fit: to=%d > local=%d", xSyncRequest.ToId, localHeight)
 						// break
 					}
 					xSyncChan <- xSyncRequest
