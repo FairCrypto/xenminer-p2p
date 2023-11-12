@@ -253,7 +253,7 @@ func processBlockHeight(ctx context.Context) {
 					_ = rw.Flush()
 
 					delta = uint(xMsg.ToId - xMsg.FromId)
-					totalBatches := uint32(math.Ceil(float64(delta / uint(xSyncRequest.Count))))
+					totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
 
 					for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
 						xSyncRequest = XSyncMessage{
@@ -275,7 +275,7 @@ func processBlockHeight(ctx context.Context) {
 							break
 						}
 						_ = rw.Flush()
-						logger.Infof("REQD %d", xSyncRequest)
+						logger.Infof("BREQ %d", xSyncRequest)
 						runtime.Gosched()
 					}
 
