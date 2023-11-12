@@ -25,7 +25,7 @@ const (
 )
 
 type XSyncMessage struct {
-	SeqNo  uint32
+	SeqNo  int32
 	Type   XSyncMessageType
 	Count  uint32
 	FromId uint64

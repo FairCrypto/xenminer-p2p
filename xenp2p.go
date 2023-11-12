@@ -277,10 +277,10 @@ func processBlockHeight(ctx context.Context) {
 
 						delta = uint(xMsg.ToId - xMsg.FromId)
 						// totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
-						totalBatches := uint32(2)
+						totalBatches := int32(2)
 						logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
 
-						for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
+						for batchNo := int32(0); batchNo < totalBatches; batchNo++ {
 							xSyncRequest = XSyncMessage{
 								Count:  negotiatedBatchCount,
 								FromId: uint64(0),
@@ -288,6 +288,9 @@ func processBlockHeight(ctx context.Context) {
 								SeqNo:  batchNo,
 								Type:   blocksReq,
 								Blocks: make([]Block, 0),
+							}
+							if batchNo+1 == totalBatches {
+								xSyncRequest.SeqNo = -1
 							}
 							bytes, err := json.Marshal(&xSyncRequest)
 							if err != nil {
@@ -327,7 +330,7 @@ func processBlockHeight(ctx context.Context) {
 								}
 							}
 						}
-						if xMsg.SeqNo+1 == xMsg.Count {
+						if xMsg.SeqNo == -1 {
 							logger.Info("Complete")
 							quit <- struct{}{}
 						}
