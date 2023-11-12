@@ -151,7 +151,6 @@ func processBlockHeight(ctx context.Context) {
 	var xSyncRequest XSyncMessage
 	var negotiatedBatchCount = uint32(blockBatchSize)
 
-	var negotiating = false
 	var receiving = false
 
 	for {
@@ -175,7 +174,7 @@ func processBlockHeight(ctx context.Context) {
 			maxBlockHeight = blockchainHeight
 			logger.Info("MAX HEIGHT: ", maxBlockHeight)
 		}
-		if maxBlockHeight > localHeight && peerId != masterPeerId && !receiving && !negotiating {
+		if maxBlockHeight > localHeight && peerId != masterPeerId && !receiving {
 			logger.Info("DIFF: ", localHeight, "<", maxBlockHeight)
 			delta := uint(math.Min(float64(maxBlockHeight-localHeight), maxDeltaLen))
 			want := make([]uint, delta)
@@ -192,8 +191,6 @@ func processBlockHeight(ctx context.Context) {
 			}
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
-
-			negotiating = true
 
 			xSyncRequest = XSyncMessage{
 				Type:   setupReq,
@@ -217,6 +214,7 @@ func processBlockHeight(ctx context.Context) {
 			_ = rw.Flush()
 			logger.Infof("REQD %s", xSyncRequest)
 
+			receiving = true
 			go func() {
 				for {
 					msgStr, err := rw.ReadString('\n')
