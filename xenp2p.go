@@ -333,7 +333,9 @@ func processBlockHeight(ctx context.Context) {
 							}
 							if xMsg.SeqNo == -1 {
 								logger.Info("Complete")
-								quit <- struct{}{}
+								receiving = false
+								return
+								// quit <- struct{}{}
 							}
 						}
 					}
