@@ -250,6 +250,7 @@ func processBlockHeight(ctx context.Context) {
 				quit <- struct{}{}
 				logger.Info("Stopping the receiver", err)
 				receiving = false
+				return
 			}()
 
 			for {
