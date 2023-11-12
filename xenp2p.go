@@ -228,11 +228,17 @@ func processBlockHeight(ctx context.Context) {
 						logger.Warn("Err in unmarshall: ", err)
 						break
 					}
-					if xSyncRequest.Count < 1 ||
-						xSyncRequest.FromId != uint64(localHeight)+1 ||
-						xSyncRequest.ToId <= uint64(localHeight) {
-						logger.Warn("XSync params don't fit; aborting XSync")
-						break
+					if xSyncRequest.Count < 1 {
+						logger.Warnf("XSync params don't fit: count=%d", xSyncRequest.Count)
+						// break
+					}
+					if xSyncRequest.FromId != uint64(localHeight)+1 {
+						logger.Warnf("XSync params don't fit: from=%d <> local=%d", xSyncRequest.FromId, localHeight+1)
+						// break
+					}
+					if xSyncRequest.ToId <= uint64(localHeight) {
+						logger.Warn("XSync params don't fit: to=%d > local:%d", xSyncRequest.ToId, localHeight)
+						// break
 					}
 					xSyncChan <- xSyncRequest
 				}
