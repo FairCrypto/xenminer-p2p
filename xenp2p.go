@@ -232,15 +232,15 @@ func processBlockHeight(ctx context.Context) {
 						break
 					}
 					if xSyncRequest.Count < 1 {
-						logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count, xSyncRequest)
+						logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
 						// break
 					}
 					if xSyncRequest.FromId != uint64(localHeight)+1 {
-						logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1, xSyncRequest)
+						logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
 						// break
 					}
 					if xSyncRequest.ToId <= uint64(localHeight) {
-						logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight, xSyncRequest)
+						logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
 						// break
 					}
 					xSyncChan <- xSyncRequest
@@ -259,7 +259,7 @@ func processBlockHeight(ctx context.Context) {
 					_ = conn.Close()
 					break
 				case xMsg := <-xSyncChan:
-					logger.Infof("inc msg %s", xMsg)
+					logger.Infof("inc msg %s", xMsg.Type)
 					switch xMsg.Type {
 					case setupAck:
 						logger.Infof("ACKD %s", xMsg)
@@ -324,6 +324,10 @@ func processBlockHeight(ctx context.Context) {
 									logger.Infof("%d < %s", block.Id, msg.GetFrom())
 								}
 							}
+						}
+						if xMsg.SeqNo+1 == xMsg.Count {
+							logger.Info("Complete")
+							quit <- struct{}{}
 						}
 					}
 				}
