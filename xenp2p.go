@@ -223,21 +223,24 @@ func processBlockHeight(ctx context.Context) {
 						logger.Warn("read err: ", err)
 						break
 					}
+					if len(msgStr) == 1 {
+						continue
+					}
 					err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
 					if err != nil {
 						logger.Warn("Err in unmarshall: ", err)
 						break
 					}
 					if xSyncRequest.Count < 1 {
-						logger.Warnf("XSync params don't fit: count=%d", xSyncRequest.Count)
+						logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count, xSyncRequest)
 						// break
 					}
 					if xSyncRequest.FromId != uint64(localHeight)+1 {
-						logger.Warnf("XSync params don't fit: from=%d <> local=%d", xSyncRequest.FromId, localHeight+1)
+						logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1, xSyncRequest)
 						// break
 					}
 					if xSyncRequest.ToId <= uint64(localHeight) {
-						logger.Warnf("XSync params don't fit: to=%d > local=%d", xSyncRequest.ToId, localHeight)
+						logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight, xSyncRequest)
 						// break
 					}
 					xSyncChan <- xSyncRequest
@@ -255,6 +258,7 @@ func processBlockHeight(ctx context.Context) {
 				_ = conn.Close()
 				break
 			case xMsg := <-xSyncChan:
+				logger.Infof("inc msg %s", xMsg)
 				switch xMsg.Type {
 				case setupAck:
 					logger.Infof("ACKD %s", xMsg)
@@ -294,7 +298,7 @@ func processBlockHeight(ctx context.Context) {
 						}
 						_ = rw.Flush()
 						logger.Infof("BREQ %d", xSyncRequest)
-						runtime.Gosched()
+						// runtime.Gosched()
 					}
 
 				case blocksResp:

@@ -134,14 +134,14 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 					msg.Blocks = append(msg.Blocks, *block)
 					nextId += 1
 				}
+				logger.Infof("MSG %d %d", msg.Type, len(msg.Blocks))
 				bytes, err := json.Marshal(&msg)
 				n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-				_ = rw.Flush()
 				if err != nil {
 					processWriteError(err)
-				} else {
-					logger.Infof("%d...%d (%d bytes) > %s (seq=%d)", firstId, nextId, n, id, msg.SeqNo)
 				}
+				_ = rw.Flush()
+				logger.Infof("%d...%d (%d bytes) > %s (seq=%d)", firstId, nextId, n, id, msg.SeqNo)
 			}
 
 		case aux := <-quit:
