@@ -14,6 +14,25 @@ import (
 	"runtime"
 )
 
+type XSyncMessageType int
+
+const (
+	setupReq XSyncMessageType = iota
+	setupAck
+	setupCnf
+	blocksReq
+	blocksResp
+)
+
+type XSyncMessage struct {
+	SeqNo  uint32
+	Type   XSyncMessageType
+	Count  uint32
+	FromId uint64
+	ToId   uint64
+	Blocks []Block
+}
+
 type XSyncRequest struct {
 	Ack       bool
 	BatchSize uint32
@@ -29,138 +48,115 @@ type BlockRequest struct {
 
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
-	quit := make(chan struct{})
+	quit := make(chan string)
 	nextId := int64(0)
+	localHeight := getCurrentHeight(db)
+	xSyncChan := make(chan XSyncMessage)
+	var xSyncRequest XSyncMessage
 
-	var xSyncRequest XSyncRequest
-	var blockRequest BlockRequest
+	processReadError := func(err error) {
+		logger.Warn("read err: ", err)
+		quit <- "read err"
+	}
+	processWriteError := func(err error) {
+		logger.Warn("write err: ", err)
+		quit <- "write err"
+	}
+	processMarshalError := func(err error) {
+		logger.Warn("marshal err: ", err)
+		quit <- "marshal err"
+	}
+	processUnmarshalError := func(err error) {
+		logger.Warn("unmarshal err: ", err)
+		quit <- "unmarshal err"
+	}
+	processProtocolError := func(aux string) {
+		logger.Warnf("protocol err: %s", aux)
+		quit <- "unmarshal err"
+	}
 
 	go func() {
 		logger.Info("Processing requests")
-		localHeight := getCurrentHeight(db)
-
-		str, err := rw.ReadString('\n')
-		if err != nil {
-			logger.Warn("read err: ", err)
-			quit <- struct{}{}
-			return
-		}
-		// count += n
-		err = json.Unmarshal([]byte(str), &xSyncRequest)
-		if err != nil {
-			logger.Warn("unmarshal err: ", err)
-			quit <- struct{}{}
-			return
-		}
-		logger.Infof("RCVD %s", xSyncRequest)
-		if xSyncRequest.Ack {
-			logger.Warn("illegal state: ack=true")
-			quit <- struct{}{}
-			return
-		}
-		if xSyncRequest.FromId > uint64(localHeight) {
-			logger.Warn("illegal ask: > max_height")
-			quit <- struct{}{}
-			return
-		}
-		if xSyncRequest.ToId > uint64(localHeight) {
-			xSyncRequest.ToId = uint64(localHeight)
-		}
-		if xSyncRequest.BatchSize > blockBatchSize {
-			xSyncRequest.BatchSize = uint32(blockBatchSize)
-		}
-		xSyncRequest.Ack = true
-		xSyncBytes, err := json.Marshal(&xSyncRequest)
-		if err != nil {
-			logger.Warn("Err in marshal ", err)
-			quit <- struct{}{}
-			return
-		}
-		_, err = rw.WriteString(fmt.Sprintf("%s\n", string(xSyncBytes)))
-		if err != nil {
-			logger.Warn("Err in write ", err)
-			quit <- struct{}{}
-			return
-		}
-		_ = rw.Flush()
-		logger.Infof("ACKD %s", xSyncRequest)
-		confirmedReqStr, err := rw.ReadString('\n')
-		if err != nil {
-			logger.Warn("read err: ", err)
-			quit <- struct{}{}
-			return
-		}
-		err = json.Unmarshal([]byte(confirmedReqStr), &xSyncRequest)
-		if err != nil {
-			logger.Warn("Err in unmarshal: ", err)
-			quit <- struct{}{}
-			return
-		}
-		logger.Infof("NEGD %s", xSyncRequest)
-		nextId = int64(xSyncRequest.FromId) - 1
-
-		acked := true
 		for {
 			str, err := rw.ReadString('\n')
 			if err != nil {
-				logger.Warn("read err: ", err)
-				quit <- struct{}{}
+				processReadError(err)
 				return
 			}
-			logger.Infof("???: %d", len(str))
-			err = json.Unmarshal([]byte(str), &blockRequest)
+			if len(str) == 1 {
+				continue
+			}
+			err = json.Unmarshal([]byte(str), &xSyncRequest)
 			if err != nil {
-				if len(str) == 1 {
-					continue
-				}
-				logger.Warn("Error converting data message: ", err, str)
-				quit <- struct{}{}
+				processUnmarshalError(err)
 				return
 			}
-			if !blockRequest.Ack && acked {
-				if blockRequest.NextId == -1 {
-					nextId += 1
-				} else {
-					nextId = blockRequest.NextId
-				}
-				logger.Infof("ASKD: %d -> %d", blockRequest.NextId, nextId)
-
-				var blocks []Block
-				firstId := nextId
-				for i := 0; i < int(xSyncRequest.BatchSize); i++ {
-					block, err := getBlock(db, uint(nextId))
-					if err != nil {
-						logger.Warn("Error getting block: ", err)
-						quit <- struct{}{}
-						return
-					}
-					logger.Infof("Packed block %d %d", nextId, block.Id)
-					blocks = append(blocks, *block)
-					nextId += 1
-				}
-				bytes, err := json.Marshal(&blocks)
-				n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-				_ = rw.Flush()
-				if err != nil {
-					logger.Warn("Error sending blocks: ", err)
-					quit <- struct{}{}
-					return
-				} else {
-					logger.Infof("%d...%d (%d bytes) > %s", firstId, nextId, n, id)
-					acked = false
-				}
-			} else if blockRequest.Ack && !acked {
-				acked = true
-			} else {
-				logger.Warn("Illegal state")
-				quit <- struct{}{}
-				return
-			}
+			xSyncChan <- xSyncRequest
 			runtime.Gosched()
 		}
 	}()
 
 	select {
+	case msg := <-xSyncChan:
+		switch msg.Type {
+		case setupReq:
+			logger.Infof("RCVD %s", msg)
+			if msg.FromId > uint64(localHeight) {
+				processProtocolError("illegal ask: > max_height")
+			}
+			if msg.ToId > uint64(localHeight) {
+				msg.ToId = uint64(localHeight)
+			}
+			if msg.Count > blockBatchSize {
+				msg.Count = uint32(blockBatchSize)
+			}
+			msg.Type = setupAck
+			bytes, err := json.Marshal(&msg)
+			if err != nil {
+				processMarshalError(err)
+			}
+			_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+			if err != nil {
+				processWriteError(err)
+			}
+			_ = rw.Flush()
+			logger.Infof("ACKD %s", msg)
+
+		case setupCnf:
+			nextId = int64(msg.FromId) - 1
+			logger.Infof("NEGD %s", msg)
+
+		case blocksReq:
+			if msg.FromId == 0 {
+				nextId += 1
+			} else {
+				nextId = int64(msg.FromId)
+			}
+			logger.Infof("ASKD: %d -> %d", msg.FromId, nextId)
+
+			var blocks []Block
+			firstId := nextId
+			for i := 0; i < int(msg.Count); i++ {
+				block, err := getBlock(db, uint(nextId))
+				if err != nil {
+					logger.Warn("Error getting block: ", err)
+					quit <- "error getting block"
+				}
+				logger.Infof("Packed block %d %d", nextId, block.Id)
+				blocks = append(blocks, *block)
+				nextId += 1
+			}
+			bytes, err := json.Marshal(&blocks)
+			n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+			_ = rw.Flush()
+			if err != nil {
+				processWriteError(err)
+			} else {
+				logger.Infof("%d...%d (%d bytes) > %s", firstId, nextId, n, id)
+			}
+		}
+		return nil
+
 	case <-quit:
 		return errors.New("stopped")
 	}

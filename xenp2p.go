@@ -127,7 +127,7 @@ type NetworkState struct {
 
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
-const blockSyncProto = "/xen/blocks/sync/0.1.1"
+const blockSyncProto = "/xen/blocks/sync/0.1.2"
 const maxDeltaLen = 200
 const blockBatchSize = 20
 
@@ -146,6 +146,9 @@ func processBlockHeight(ctx context.Context) {
 	peerId := ctx.Value("peerId").(string)
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
+
+	xSyncChan := make(chan XSyncMessage)
+	var xSyncRequest XSyncMessage
 
 	var negotiating = false
 	var receiving = false
@@ -188,16 +191,14 @@ func processBlockHeight(ctx context.Context) {
 			}
 			rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 			logger.Infof("Connection to %s", msg.GetFrom().String(), conn.Stat())
-			// time.Sleep(time.Second)
 
 			negotiating = true
-			// receiving = true
 
-			var xSyncRequest XSyncRequest = XSyncRequest{
-				Ack:       false,
-				BatchSize: blockBatchSize,
-				FromId:    uint64(localHeight) + 1,
-				ToId:      uint64(maxBlockHeight),
+			xSyncRequest = XSyncMessage{
+				Type:   setupReq,
+				Count:  blockBatchSize,
+				FromId: uint64(localHeight) + 1,
+				ToId:   uint64(maxBlockHeight),
 			}
 
 			xSyncBytes, err := json.Marshal(&xSyncRequest)
@@ -212,147 +213,97 @@ func processBlockHeight(ctx context.Context) {
 			}
 			_ = rw.Flush()
 			logger.Infof("REQD %s", xSyncRequest)
-			ackedReqStr, err := rw.ReadString('\n')
-			if err != nil {
-				logger.Warn("read err: ", err)
-				continue
-			}
-			err = json.Unmarshal([]byte(ackedReqStr), &xSyncRequest)
-			if err != nil {
-				logger.Warn("Err in unmarshall: ", err)
-				continue
-			}
-			if !xSyncRequest.Ack {
-				logger.Warn("No Ack; aborting XSync")
-				continue
-			}
-			if xSyncRequest.BatchSize < 1 ||
-				xSyncRequest.FromId != uint64(localHeight)+1 ||
-				xSyncRequest.ToId <= uint64(localHeight) {
-				logger.Warn("XSync params don't fit; aborting XSync")
-				continue
-			}
-			logger.Infof("ACKD %s", xSyncRequest)
-			_, err = rw.WriteString(fmt.Sprintf("%s\n", ackedReqStr))
-			if err != nil {
-				logger.Warn("Err in write ", err)
-				continue
-			}
-			_ = rw.Flush()
 
-			negotiating = false
-			receiving = true
-
-			delta = uint(xSyncRequest.ToId - xSyncRequest.FromId)
-			var blockRequest BlockRequest
-			var blocks []Block
-
-			totalBatches := uint32(math.Ceil(float64(delta / uint(xSyncRequest.BatchSize))))
-
-			for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
-
-				blockRequest = BlockRequest{NextId: int64(-1), SeqNo: batchNo, Ack: false}
-				bytes, err := json.Marshal(&blockRequest)
-				if err != nil {
-					logger.Warn("Err in marshall ", err)
-					break
-				}
-				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-				if err != nil {
-					logger.Warn("Err in write ", err)
-					break
-				}
-				_ = rw.Flush()
-				logger.Infof("REQD %d", blockRequest)
-				// time.Sleep(time.Second)
-
-				str, err := rw.ReadString('\n')
-				if err != nil {
-					logger.Warn("read err: ", err)
-					break
-				}
-				err = json.Unmarshal([]byte(str), &blocks)
-				if err != nil {
-					logger.Warn("Error converting data message: ", err)
-					break
-				}
-				logger.Infof("Received %d blocks (%d bytes)", len(blocks), len(str), blocks[0])
-				innerErr := false
-				for _, block := range blocks {
-					prevBlock, err := getPrevBlock(db, &block)
+			go func() {
+				for {
+					msgStr, err := rw.ReadString('\n')
 					if err != nil {
-						logger.Warnf("Error getting prev block $d: ", block.Id, err)
-						innerErr = true
+						logger.Warn("read err: ", err)
 						break
 					}
-					if prevBlock.BlockHash != block.PrevHash {
-						logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
-						innerErr = true
+					err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
+					if err != nil {
+						logger.Warn("Err in unmarshall: ", err)
 						break
 					}
-					blockIsValid, err := validateBlock(block, logger)
-					if peerId != masterPeerId && blockIsValid {
-						err = insertBlock(db, &block)
+					if xSyncRequest.Count < 1 ||
+						xSyncRequest.FromId != uint64(localHeight)+1 ||
+						xSyncRequest.ToId <= uint64(localHeight) {
+						logger.Warn("XSync params don't fit; aborting XSync")
+						break
+					}
+					xSyncChan <- xSyncRequest
+				}
+			}()
+
+			select {
+			case xMsg := <-xSyncChan:
+				switch xMsg.Type {
+				case setupAck:
+					logger.Infof("ACKD %s", msg)
+					xMsg.Type = setupCnf
+					bytes, err := json.Marshal(&msg)
+					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+					if err != nil {
+						logger.Warn("Err in write ", err)
+						continue
+					}
+					_ = rw.Flush()
+
+					delta = uint(xMsg.ToId - xMsg.FromId)
+					totalBatches := uint32(math.Ceil(float64(delta / uint(xSyncRequest.Count))))
+
+					for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
+						xSyncRequest = XSyncMessage{
+							FromId: uint64(0),
+							SeqNo:  batchNo,
+							Type:   blocksReq,
+						}
+						bytes, err := json.Marshal(&xSyncRequest)
 						if err != nil {
-							logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
-							innerErr = true
+							logger.Warn("Err in marshall ", err)
 							break
-						} else {
-							wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
-							logger.Infof("%d < %s", block.Id, msg.GetFrom())
-							blockRequest.Ack = true
-							bytes, err := json.Marshal(blockRequest)
+						}
+						_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+						if err != nil {
+							logger.Warn("Err in write ", err)
+							break
+						}
+						_ = rw.Flush()
+						logger.Infof("REQD %d", xSyncRequest)
+						runtime.Gosched()
+					}
+
+				case blocksResp:
+					logger.Infof("Received %d blocks", len(xMsg.Blocks))
+					for _, block := range xMsg.Blocks {
+						prevBlock, err := getPrevBlock(db, &block)
+						if err != nil {
+							logger.Warnf("Error getting prev block $d: ", block.Id, err)
+							break
+						}
+						if prevBlock.BlockHash != block.PrevHash {
+							logger.Error("Error block hash mismatch on ids: ", prevBlock.BlockHash, block.PrevHash)
+							break
+						}
+						blockIsValid, err := validateBlock(block, logger)
+						if peerId != masterPeerId && blockIsValid {
+							err = insertBlock(db, &block)
 							if err != nil {
-								logger.Warn("Err in marshall ", err)
-								innerErr = true
+								logger.Warnf("Error adding block %d to DB: %s", block.Id, err)
 								break
+							} else {
+								wantedBlockIds.Remove(fmt.Sprintf("%d", block.Id))
+								logger.Infof("%d < %s", block.Id, msg.GetFrom())
 							}
-							_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-							if err != nil {
-								logger.Warn("Err in write ", err)
-								innerErr = true
-								break
-							}
-							_ = rw.Flush()
 						}
 					}
 				}
-				if innerErr {
-					break
-				}
-				runtime.Gosched()
-			}
-			_ = conn.Close()
-			receiving = false
 
-			/*
-				msgBytes, err := json.Marshal(want)
-				if err != nil {
-					logger.Warn("Error encoding message: ", err)
-				}
-				err = topics.get.Publish(ctx, msgBytes)
-				if err != nil {
-					logger.Warn("Error publishing message: ", err)
-				}
-			*/
-		} else {
-			// TODO: tests only
-			/*
-				want := make([]uint, 10)
-				for i := uint(0); i < 10; i++ {
-					want[i] = i + 1
-					wantedBlockIds.Set(fmt.Sprintf("%d", i+1), true)
-				}
-				msgBytes, err := json.Marshal(want)
-				if err != nil {
-					logger.Warn("Error encoding message: ", err)
-				}
-				err = topics.get.Publish(ctx, msgBytes)
-				if err != nil {
-					logger.Warn("Error publishing message: ", err)
-				}
-			*/
+			}
+
 		}
+
 		if maxBlockHeight == localHeight {
 			logger.Debug("IN SYNC: ", localHeight, "=", maxBlockHeight)
 		}
