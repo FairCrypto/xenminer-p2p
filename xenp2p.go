@@ -128,7 +128,7 @@ type NetworkState struct {
 const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 const blockSyncProto = "/xen/blocks/sync/0.1.2"
-const maxDeltaLen = 200
+const maxDeltaLen = 20
 const blockBatchSize = 20
 
 // const yieldTime = 100 * time.Millisecond
@@ -149,6 +149,7 @@ func processBlockHeight(ctx context.Context) {
 
 	xSyncChan := make(chan XSyncMessage)
 	var xSyncRequest XSyncMessage
+	var negotiatedBatchCount = uint32(blockBatchSize)
 
 	var negotiating = false
 	var receiving = false
@@ -243,6 +244,7 @@ func processBlockHeight(ctx context.Context) {
 				switch xMsg.Type {
 				case setupAck:
 					logger.Infof("ACKD %s", xMsg)
+					negotiatedBatchCount = xMsg.Count
 					xMsg.Type = setupCnf
 					bytes, err := json.Marshal(&xMsg)
 					_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
@@ -257,6 +259,7 @@ func processBlockHeight(ctx context.Context) {
 
 					for batchNo := uint32(0); batchNo < totalBatches; batchNo++ {
 						xSyncRequest = XSyncMessage{
+							Count:  negotiatedBatchCount,
 							FromId: uint64(0),
 							ToId:   uint64(0),
 							SeqNo:  batchNo,

@@ -110,7 +110,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				logger.Infof("ACKD %s", msg)
 
 			case setupCnf:
-				// nextId = int64(msg.FromId) - 1
+				nextId = int64(msg.FromId) - 1
 				logger.Infof("NEGD %s", msg)
 
 			case blocksReq:
@@ -119,7 +119,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				} else {
 					nextId = int64(msg.FromId)
 				}
-				logger.Infof("ASKD: %d -> %d", msg.FromId, nextId)
+				logger.Infof("ASKD: %d -> %d, count=%d", msg.FromId, nextId, msg.Count)
 				msg.Type = blocksResp
 				firstId := nextId
 				for i := 0; i < int(msg.Count); i++ {
