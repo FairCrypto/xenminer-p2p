@@ -35,29 +35,30 @@ type XSyncMessage struct {
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
 	quit := make(chan string)
+	quitWithError := make(chan error)
 	nextId := int64(0)
 	localHeight := getCurrentHeight(db)
 	xSyncChan := make(chan XSyncMessage)
 
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
-		quit <- "read err"
+		quitWithError <- err
 	}
 	processWriteError := func(err error) {
 		logger.Warn("write err: ", err)
-		quit <- "write err"
+		quitWithError <- err
 	}
 	processMarshalError := func(err error) {
 		logger.Warn("marshal err: ", err)
-		quit <- "marshal err"
+		quitWithError <- err
 	}
 	processUnmarshalError := func(err error) {
 		logger.Warn("unmarshal err: ", err)
-		quit <- "unmarshal err"
+		quitWithError <- err
 	}
 	processProtocolError := func(aux string) {
 		logger.Warnf("protocol err: %s", aux)
-		quit <- "unmarshal err"
+		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
 
 	go func() {
@@ -142,8 +143,11 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				}
 			}
 
-		case <-quit:
-			return errors.New("stopped")
+		case aux := <-quit:
+			return errors.New("stopped: " + aux)
+
+		case err := <-quitWithError:
+			return err
 		}
 
 	}

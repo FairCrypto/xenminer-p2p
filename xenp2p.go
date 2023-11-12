@@ -129,7 +129,7 @@ const masterPeerId = "12D3KooWLGpxvuNUmMLrQNKTqvxXbXkR1GceyRSpQXd8ZGmprvjH"
 const rendezvousString = "/xenblocks/0.1.0"
 const blockSyncProto = "/xen/blocks/sync/0.1.2"
 const maxDeltaLen = 20
-const blockBatchSize = 20
+const blockBatchSize = 10
 
 // const yieldTime = 100 * time.Millisecond
 
