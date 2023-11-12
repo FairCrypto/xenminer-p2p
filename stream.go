@@ -140,7 +140,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				if err != nil {
 					processWriteError(err)
 				} else {
-					logger.Infof("%d...%d (%d bytes) > %s", firstId, nextId, n, id)
+					logger.Infof("%d...%d (%d bytes) > %s (seq=%d)", firstId, nextId, n, id, msg.SeqNo)
 				}
 			}
 
