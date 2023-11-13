@@ -72,7 +72,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				return
 			}
 			if len(str) == 1 {
-				continue
+				// continue
 			}
 			err = json.Unmarshal([]byte(str), &xSyncRequest)
 			if err != nil {
