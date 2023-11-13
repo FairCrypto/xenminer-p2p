@@ -66,21 +66,28 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		var xSyncRequest XSyncMessage
 		logger.Info("Processing requests")
 		for {
-			str, err := rw.ReadString('\n')
-			if err != nil {
-				processReadError(err)
+			select {
+			case <-quit:
+			case <-quitWithError:
+				logger.Info("Done processing requests")
 				return
+			default:
+				str, err := rw.ReadString('\n')
+				if err != nil {
+					processReadError(err)
+					return
+				}
+				if len(str) == 1 {
+					continue
+				}
+				err = json.Unmarshal([]byte(str), &xSyncRequest)
+				if err != nil {
+					processUnmarshalError(err)
+					return
+				}
+				xSyncChan <- xSyncRequest
+				runtime.Gosched()
 			}
-			if len(str) == 1 {
-				// continue
-			}
-			err = json.Unmarshal([]byte(str), &xSyncRequest)
-			if err != nil {
-				processUnmarshalError(err)
-				return
-			}
-			xSyncChan <- xSyncRequest
-			runtime.Gosched()
 		}
 	}()
 
