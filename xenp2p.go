@@ -256,7 +256,6 @@ func processBlockHeight(ctx context.Context) {
 								// break
 							}
 							xSyncChan <- xSyncRequest
-							//
 						}
 					}
 					runtime.Gosched()
@@ -350,6 +349,7 @@ func processBlockHeight(ctx context.Context) {
 							}
 							if xMsg.SeqNo == -1 {
 								logger.Info("Complete")
+								_ = conn.Close()
 								close(quitReceiving)
 								time.Sleep(time.Second)
 								close(quit)
