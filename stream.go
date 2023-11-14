@@ -54,31 +54,31 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
 		// quitReading <- struct{}{}
-		close(quitReading)
+		// close(quitReading)
 		quitWithError <- err
 	}
 	processWriteError := func(err error) {
 		logger.Warn("write err: ", err)
 		// quitReading <- struct{}{}
-		close(quitReading)
+		// close(quitReading)
 		quitWithError <- err
 	}
 	processMarshalError := func(err error) {
 		logger.Warn("marshal err: ", err)
 		// quitReading <- struct{}{}
-		close(quitReading)
+		// close(quitReading)
 		quitWithError <- err
 	}
 	processUnmarshalError := func(err error) {
 		logger.Warn("unmarshal err: ", err)
 		// quitReading <- struct{}{}
-		close(quitReading)
+		// close(quitReading)
 		quitWithError <- err
 	}
 	processProtocolError := func(aux string) {
 		logger.Warnf("protocol err: %s", aux)
 		// quitReading <- struct{}{}
-		close(quitReading)
+		// close(quitReading)
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
 

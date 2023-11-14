@@ -359,7 +359,7 @@ func processBlockHeight(ctx context.Context) {
 								close(quit)
 								// quitReceiving <- struct{}{}
 								// receiving = false
-								return
+								// return
 							}
 						}
 					}
