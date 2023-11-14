@@ -149,7 +149,7 @@ func processBlockHeight(ctx context.Context) {
 
 	quitReceiving := make(chan struct{}, 1)
 	quit := make(chan struct{}, 1)
-	xSyncChan := make(chan XSyncMessage)
+	xSyncChan := make(chan XSyncMessage, 1)
 
 	var xSyncRequest XSyncMessage
 	var negotiatedBatchCount = uint32(blockBatchSize)

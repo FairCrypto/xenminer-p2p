@@ -39,7 +39,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	quitReading := make(chan struct{}, 1)
 	quit := make(chan string, 1)
 	quitWithError := make(chan error, 1)
-	xSyncChan := make(chan XSyncMessage)
+	xSyncChan := make(chan XSyncMessage, 1)
 
 	nextId := int64(0)
 	localHeight := getCurrentHeight(db)
