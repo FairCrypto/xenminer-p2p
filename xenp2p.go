@@ -268,13 +268,13 @@ func processBlockHeight(ctx context.Context) {
 					logger.Info("Quitting the proto")
 					_ = conn.Close()
 					receiving = false
+					quitReceiving <- struct{}{}
 					close(quit)
 				}()
 
 				for {
 					select {
 					case <-quit:
-						quitReceiving <- struct{}{}
 						return
 
 					case xMsg := <-xSyncChan:
@@ -351,8 +351,8 @@ func processBlockHeight(ctx context.Context) {
 								logger.Info("Complete")
 								// quitReceiving <- struct{}{}
 								// receiving = false
-								quit <- struct{}{}
-								// return
+								// quit <- struct{}{}
+								return
 							}
 						}
 					}
