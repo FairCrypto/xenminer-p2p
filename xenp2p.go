@@ -223,13 +223,17 @@ func processBlockHeight(ctx context.Context) {
 			receiving = true
 			closing := false
 			doReceive := func(quitReceiving chan struct{}) {
+				defer func() {
+					logger.Info("Stopping the receiver")
+					err = conn.Close()
+					logger.Info("Receiver stopped: ", err)
+					receiving = false
+					close(quitReceiving)
+				}()
 				for {
 					select {
 					case <-quitReceiving:
-						logger.Info("Stopping the receiver")
-						err = conn.Close()
-						logger.Info("Receiver stopped: ", err)
-						receiving = false
+						closing = true
 						return
 
 					default:
@@ -242,6 +246,7 @@ func processBlockHeight(ctx context.Context) {
 							err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
 							if err != nil {
 								logger.Warn("Err in unmarshall: ", err)
+								quitReceiving <- struct{}{}
 								break
 							}
 							if xSyncRequest.Count < 1 {
@@ -264,12 +269,15 @@ func processBlockHeight(ctx context.Context) {
 			}
 
 			doSend := func(quit chan struct{}) {
+				defer func() {
+					err = conn.Close()
+					logger.Warn("Quitting the proto: ", err)
+					close(quit)
+				}()
 				for {
 					select {
 					case <-quit:
-						err = conn.Close()
-						logger.Warn("Quitting the proto: ", err)
-						// receiving = false
+						closing = true
 						return
 
 					case xMsg := <-xSyncChan:
@@ -349,15 +357,13 @@ func processBlockHeight(ctx context.Context) {
 								}
 							}
 							if xMsg.SeqNo == -1 {
-								closing = true
+								// closing = true
 								logger.Info("Complete")
-								_ = conn.Close()
-								close(quitReceiving)
-								time.Sleep(time.Second)
-								close(quit)
-								// quitReceiving <- struct{}{}
-								// receiving = false
-								// return
+								quit <- struct{}{}
+								// _ = conn.Close()
+								// close(quitReceiving)
+								// time.Sleep(time.Second)
+								// close(quit)
 							}
 						}
 					}
