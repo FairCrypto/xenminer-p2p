@@ -272,7 +272,6 @@ func processBlockHeight(ctx context.Context) {
 
 			go func() {
 				defer func() {
-					quitReceiving <- struct{}{}
 					err = conn.Close()
 					logger.Warn("Quitting the proto: ", err)
 				}()
@@ -355,9 +354,8 @@ func processBlockHeight(ctx context.Context) {
 							}
 							if xMsg.SeqNo == -1 {
 								logger.Info("Complete")
-								// quitReceiving <- struct{}{}
+								quitReceiving <- struct{}{}
 								receiving = false
-								// quit <- struct{}{}
 								return
 							}
 						}
