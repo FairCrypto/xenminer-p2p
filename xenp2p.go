@@ -351,8 +351,8 @@ func processBlockHeight(ctx context.Context) {
 								logger.Info("Complete")
 								// quitReceiving <- struct{}{}
 								// receiving = false
-								// quit <- struct{}{}
-								return
+								quit <- struct{}{}
+								// return
 							}
 						}
 					}
