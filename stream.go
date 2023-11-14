@@ -68,6 +68,8 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		for {
 			select {
 			case <-quit:
+				logger.Info("Done processing requests")
+				return
 			case <-quitWithError:
 				logger.Info("Done processing requests")
 				return

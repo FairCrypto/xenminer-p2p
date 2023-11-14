@@ -229,7 +229,7 @@ func processBlockHeight(ctx context.Context) {
 						msgStr, err := rw.ReadString('\n')
 						if err != nil {
 							logger.Warn("read err: ", err)
-							break
+							quit <- struct{}{}
 						}
 						if len(msgStr) == 1 {
 							continue
