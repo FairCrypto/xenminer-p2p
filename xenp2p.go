@@ -244,28 +244,27 @@ func processBlockHeight(ctx context.Context) {
 						logger.Warn("read err: ", err)
 						quitReceiving <- struct{}{}
 					}
-					if len(msgStr) == 1 {
-						// continue
+					if len(msgStr) != 1 {
+						err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
+						if err != nil {
+							logger.Warn("Err in unmarshall: ", err)
+							break
+						}
+						if xSyncRequest.Count < 1 {
+							logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
+							// break
+						}
+						if xSyncRequest.FromId != uint64(localHeight)+1 {
+							logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
+							// break
+						}
+						if xSyncRequest.ToId <= uint64(localHeight) {
+							logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
+							// break
+						}
+						xSyncChan <- xSyncRequest
+						// runtime.Gosched()
 					}
-					err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
-					if err != nil {
-						logger.Warn("Err in unmarshall: ", err)
-						break
-					}
-					if xSyncRequest.Count < 1 {
-						logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
-						// break
-					}
-					if xSyncRequest.FromId != uint64(localHeight)+1 {
-						logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
-						// break
-					}
-					if xSyncRequest.ToId <= uint64(localHeight) {
-						logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
-						// break
-					}
-					xSyncChan <- xSyncRequest
-					// runtime.Gosched()
 				}
 				// }
 			}
