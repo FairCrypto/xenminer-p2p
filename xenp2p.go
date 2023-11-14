@@ -147,9 +147,9 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
-	quitReceiving := make(chan struct{}, 1)
-	quit := make(chan struct{}, 1)
-	xSyncChan := make(chan XSyncMessage, 1)
+	var quitReceiving chan struct{}
+	var quit chan struct{}
+	var xSyncChan chan XSyncMessage
 
 	var xSyncRequest XSyncMessage
 	var negotiatedBatchCount = uint32(blockBatchSize)
@@ -192,6 +192,10 @@ func processBlockHeight(ctx context.Context) {
 			}
 			logger.Infof("WANT: %d", delta)
 
+			quitReceiving = make(chan struct{})
+			quit = make(chan struct{})
+			xSyncChan = make(chan XSyncMessage, 1)
+
 			conn, err := h.NewStream(ctx, msg.GetFrom(), blockSyncProto)
 			if err != nil {
 				logger.Warn("Err in conn ", err)
@@ -223,19 +227,17 @@ func processBlockHeight(ctx context.Context) {
 			logger.Infof("REQD %s", xSyncRequest)
 
 			receiving = true
-			go func() {
+			doReceive := func(quitReceiving chan struct{}) {
 				defer func() {
-					err = conn.Close()
-					logger.Info("Stopping the receiver", err)
-					receiving = false
+
 				}()
 
 				// for {
 				select {
 				case <-quitReceiving:
-					if receiving {
-						quit <- struct{}{}
-					}
+					err = conn.Close()
+					logger.Info("Stopping the receiver", err)
+					receiving = false
 					return
 
 				default:
@@ -268,18 +270,17 @@ func processBlockHeight(ctx context.Context) {
 					// runtime.Gosched()
 				}
 				// }
-			}()
+			}
 
-			go func() {
-				defer func() {
-					err = conn.Close()
-					logger.Warn("Quitting the proto: ", err)
-				}()
+			doSend := func(quit chan struct{}) {
+				defer func() {}()
 
 				// for {
 				select {
 				case <-quit:
-					receiving = false
+					err = conn.Close()
+					logger.Warn("Quitting the proto: ", err)
+					// receiving = false
 					return
 
 				case xMsg := <-xSyncChan:
@@ -360,15 +361,20 @@ func processBlockHeight(ctx context.Context) {
 						}
 						if xMsg.SeqNo == -1 {
 							logger.Info("Complete")
-							quitReceiving <- struct{}{}
-							receiving = false
+							close(quitReceiving)
+							close(quit)
+							// quitReceiving <- struct{}{}
+							// receiving = false
 							return
 						}
 					}
 					// runtime.Gosched()
 				}
 				// }
-			}()
+			}
+			go doReceive(quitReceiving)
+			go doSend(quit)
+
 		}
 
 		if maxBlockHeight == localHeight {
