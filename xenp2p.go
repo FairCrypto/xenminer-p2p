@@ -194,7 +194,7 @@ func processBlockHeight(ctx context.Context) {
 
 			quitReceiving = make(chan struct{})
 			quit = make(chan struct{})
-			xSyncChan = make(chan XSyncMessage, 1)
+			xSyncChan = make(chan XSyncMessage)
 
 			conn, err := h.NewStream(ctx, msg.GetFrom(), blockSyncProto)
 			if err != nil {
@@ -748,7 +748,7 @@ func broadcastBlockHeight(ctx context.Context) {
 	topics := ctx.Value("topics").(Topics)
 	db := ctx.Value("db").(*sql.DB)
 
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
 	quit := make(chan struct{})
 

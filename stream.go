@@ -35,16 +35,16 @@ type XSyncMessage struct {
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
 
-	quitReading := make(chan struct{}, 1)
-	quit := make(chan string, 1)
-	quitWithError := make(chan error, 1)
-	xSyncChan := make(chan XSyncMessage, 1)
+	quitReading := make(chan struct{})
+	quit := make(chan string)
+	quitWithError := make(chan error)
+	xSyncChan := make(chan XSyncMessage)
 	defer func() {
 		logger.Info("Closing Reader")
-		close(quitReading)
-		close(quit)
-		close(quitWithError)
-		close(xSyncChan)
+		// close(quitReading)
+		// close(quit)
+		// close(quitWithError)
+		// close(xSyncChan)
 	}()
 
 	nextId := int64(0)
@@ -53,26 +53,31 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
 		// quitReading <- struct{}{}
+		close(quitReading)
 		quitWithError <- err
 	}
 	processWriteError := func(err error) {
 		logger.Warn("write err: ", err)
 		// quitReading <- struct{}{}
+		close(quitReading)
 		quitWithError <- err
 	}
 	processMarshalError := func(err error) {
 		logger.Warn("marshal err: ", err)
 		// quitReading <- struct{}{}
+		close(quitReading)
 		quitWithError <- err
 	}
 	processUnmarshalError := func(err error) {
 		logger.Warn("unmarshal err: ", err)
 		// quitReading <- struct{}{}
+		close(quitReading)
 		quitWithError <- err
 	}
 	processProtocolError := func(aux string) {
 		logger.Warnf("protocol err: %s", aux)
 		// quitReading <- struct{}{}
+		close(quitReading)
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
 
@@ -93,14 +98,15 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				// quit <- "read error"
 			}
 			if len(str) == 1 {
-				break
+				// break
+			} else {
+				err = json.Unmarshal([]byte(str), &xSyncRequest)
+				if err != nil {
+					processUnmarshalError(err)
+					// quit <- "read error"
+				}
+				xSyncChan <- xSyncRequest
 			}
-			err = json.Unmarshal([]byte(str), &xSyncRequest)
-			if err != nil {
-				processUnmarshalError(err)
-				// quit <- "read error"
-			}
-			xSyncChan <- xSyncRequest
 			// runtime.Gosched()
 		}
 		// }
