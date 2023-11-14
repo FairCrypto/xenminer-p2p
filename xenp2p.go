@@ -337,7 +337,7 @@ func processBlockHeight(ctx context.Context) {
 								prevBlock, err := getPrevBlock(db, &block)
 								if err != nil {
 									logger.Warnf("Error getting prev block $d: ", block.Id, err)
-									quit <- struct{}{}
+									// quit <- struct{}{}
 									break
 								}
 								if prevBlock.BlockHash != block.PrevHash {

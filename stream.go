@@ -40,12 +40,14 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	quit := make(chan string)
 	quitWithError := make(chan error)
 	xSyncChan := make(chan XSyncMessage)
+	closing := false
 	defer func() {
 		logger.Info("Closing Reader")
+		closing = true
 		// close(quitReading)
-		// close(quit)
-		// close(quitWithError)
-		// close(xSyncChan)
+		close(quit)
+		close(quitWithError)
+		close(xSyncChan)
 	}()
 
 	nextId := int64(0)
@@ -54,7 +56,8 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
 		// quitReading <- struct{}{}
-		// close(quitReading)
+		closing = true
+		close(quitReading)
 		quitWithError <- err
 	}
 	processWriteError := func(err error) {
@@ -93,12 +96,12 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 
 			default:
 				str, err := rw.ReadString('\n')
-				if err != nil {
+				if err != nil && !closing {
 					processReadError(err)
 					// quitReading <- struct{}{}
 					// quit <- "read error"
 				}
-				if len(str) > 1 {
+				if len(str) > 1 && !closing {
 					err = json.Unmarshal([]byte(str), &xSyncRequest)
 					if err != nil {
 						processUnmarshalError(err)
