@@ -35,12 +35,14 @@ type XSyncMessage struct {
 
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
-	quitReading := make(chan struct{})
-	quit := make(chan string)
-	quitWithError := make(chan error)
+
+	quitReading := make(chan struct{}, 1)
+	quit := make(chan string, 1)
+	quitWithError := make(chan error, 1)
+	xSyncChan := make(chan XSyncMessage)
+
 	nextId := int64(0)
 	localHeight := getCurrentHeight(db)
-	xSyncChan := make(chan XSyncMessage)
 
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)

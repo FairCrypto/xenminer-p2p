@@ -147,8 +147,8 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
-	quitReceiving := make(chan struct{})
-	quit := make(chan struct{})
+	quitReceiving := make(chan struct{}, 1)
+	quit := make(chan struct{}, 1)
 	xSyncChan := make(chan XSyncMessage)
 
 	var xSyncRequest XSyncMessage
