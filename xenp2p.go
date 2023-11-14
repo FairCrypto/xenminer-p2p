@@ -272,9 +272,7 @@ func processBlockHeight(ctx context.Context) {
 				defer func() {
 					quitReceiving <- struct{}{}
 					err = conn.Close()
-					if err != nil {
-						logger.Warn("Quitting the proto: ", err)
-					}
+					logger.Warn("Quitting the proto: ", err)
 				}()
 
 				for {
