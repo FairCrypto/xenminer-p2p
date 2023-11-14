@@ -218,13 +218,17 @@ func processBlockHeight(ctx context.Context) {
 
 			receiving = true
 			go func() {
+				defer func() {
+					err = conn.Close()
+					logger.Info("Stopping the receiver", err)
+					receiving = false
+					close(quitReceiving)
+				}()
+
 				for {
 					select {
 					case <-quitReceiving:
-						err = conn.Close()
-						logger.Info("Stopping the receiver", err)
-						receiving = false
-						close(quitReceiving)
+						quit <- struct{}{}
 						return
 
 					default:
@@ -232,7 +236,6 @@ func processBlockHeight(ctx context.Context) {
 						if err != nil {
 							logger.Warn("read err: ", err)
 							quitReceiving <- struct{}{}
-							quit <- struct{}{}
 						}
 						if len(msgStr) == 1 {
 							continue
@@ -261,14 +264,17 @@ func processBlockHeight(ctx context.Context) {
 			}()
 
 			go func() {
+				defer func() {
+					logger.Info("Quitting the proto")
+					_ = conn.Close()
+					receiving = false
+					close(quit)
+				}()
+
 				for {
 					select {
 					case <-quit:
-						logger.Info("Quitting the proto")
 						quitReceiving <- struct{}{}
-						close(quit)
-						_ = conn.Close()
-						//receiving = false
 						return
 
 					case xMsg := <-xSyncChan:
@@ -345,8 +351,8 @@ func processBlockHeight(ctx context.Context) {
 								logger.Info("Complete")
 								// quitReceiving <- struct{}{}
 								// receiving = false
-								quit <- struct{}{}
-								// return
+								// quit <- struct{}{}
+								return
 							}
 						}
 					}
