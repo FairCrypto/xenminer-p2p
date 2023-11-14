@@ -227,13 +227,15 @@ func processBlockHeight(ctx context.Context) {
 					logger.Info("Stopping the receiver")
 					err = conn.Close()
 					logger.Info("Receiver stopped: ", err)
+					if !closing {
+						closing = true
+						close(quitReceiving)
+					}
 					receiving = false
-					close(quitReceiving)
 				}()
 				for {
 					select {
 					case <-quitReceiving:
-						closing = true
 						return
 
 					default:
