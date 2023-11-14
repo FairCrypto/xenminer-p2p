@@ -265,7 +265,7 @@ func processBlockHeight(ctx context.Context) {
 						// break
 					}
 					xSyncChan <- xSyncRequest
-					runtime.Gosched()
+					// runtime.Gosched()
 				}
 				// }
 			}()
@@ -365,7 +365,7 @@ func processBlockHeight(ctx context.Context) {
 							return
 						}
 					}
-					runtime.Gosched()
+					// runtime.Gosched()
 				}
 				// }
 			}()

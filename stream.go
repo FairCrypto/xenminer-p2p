@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"runtime"
 )
 
 type XSyncMessageType int
@@ -80,31 +79,31 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	go func() {
 		var xSyncRequest XSyncMessage
 		logger.Info("Processing requests")
-		for {
-			select {
-			case <-quitReading:
-				logger.Info("Done processing requests")
-				return
+		// for {
+		select {
+		case <-quitReading:
+			logger.Info("Done processing requests")
+			return
 
-			default:
-				str, err := rw.ReadString('\n')
-				if err != nil {
-					processReadError(err)
-					// quitReading <- struct{}{}
-					// quit <- "read error"
-				}
-				if len(str) == 1 {
-					continue
-				}
-				err = json.Unmarshal([]byte(str), &xSyncRequest)
-				if err != nil {
-					processUnmarshalError(err)
-					// quit <- "read error"
-				}
-				xSyncChan <- xSyncRequest
+		default:
+			str, err := rw.ReadString('\n')
+			if err != nil {
+				processReadError(err)
+				// quitReading <- struct{}{}
+				// quit <- "read error"
 			}
-			runtime.Gosched()
+			if len(str) == 1 {
+				break
+			}
+			err = json.Unmarshal([]byte(str), &xSyncRequest)
+			if err != nil {
+				processUnmarshalError(err)
+				// quit <- "read error"
+			}
+			xSyncChan <- xSyncRequest
+			// runtime.Gosched()
 		}
+		// }
 	}()
 
 	// for {
