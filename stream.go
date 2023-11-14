@@ -41,6 +41,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	quitWithError := make(chan error, 1)
 	xSyncChan := make(chan XSyncMessage, 1)
 	defer func() {
+		logger.Info("Closing Reader")
 		close(quitReading)
 		close(quit)
 		close(quitWithError)
@@ -52,27 +53,27 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
-		quitReading <- struct{}{}
+		// quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processWriteError := func(err error) {
 		logger.Warn("write err: ", err)
-		quitReading <- struct{}{}
+		// quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processMarshalError := func(err error) {
 		logger.Warn("marshal err: ", err)
-		quitReading <- struct{}{}
+		// quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processUnmarshalError := func(err error) {
 		logger.Warn("unmarshal err: ", err)
-		quitReading <- struct{}{}
+		// quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processProtocolError := func(aux string) {
 		logger.Warnf("protocol err: %s", aux)
-		quitReading <- struct{}{}
+		// quitReading <- struct{}{}
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
 
@@ -106,76 +107,78 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		}
 	}()
 
-	for {
-		select {
-		case msg := <-xSyncChan:
-			switch msg.Type {
-			case setupReq:
-				logger.Infof("RCVD %s", msg)
-				if msg.FromId > uint64(localHeight) {
-					processProtocolError("illegal ask: > max_height")
-				}
-				if msg.ToId > uint64(localHeight) {
-					msg.ToId = uint64(localHeight)
-				}
-				if msg.Count > blockBatchSize {
-					msg.Count = uint32(blockBatchSize)
-				}
-				msg.Type = setupAck
-				bytes, err := json.Marshal(&msg)
-				if err != nil {
-					processMarshalError(err)
-				}
-				_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-				if err != nil {
-					processWriteError(err)
-				}
-				_ = rw.Flush()
-				logger.Infof("ACKD %s", msg)
-
-			case setupCnf:
-				nextId = int64(msg.FromId)
-				logger.Infof("NEGD %s", msg)
-
-			case blocksReq:
-				if msg.FromId == 0 {
-					// nextId += 1
-				} else {
-					nextId = int64(msg.FromId)
-				}
-				logger.Infof("ASKD: %d -> %d, count=%d", msg.FromId, nextId, msg.Count)
-				msg.Type = blocksResp
-				firstId := nextId
-				for i := 0; i < int(msg.Count); i++ {
-					block, err := getBlock(db, uint(nextId))
-					if err != nil {
-						logger.Warn("Error getting block: ", err)
-						quit <- "error getting block"
-					}
-					logger.Debugf("Packed block %d %d", nextId, block.Id)
-					msg.Blocks = append(msg.Blocks, *block)
-					nextId += 1
-				}
-				logger.Infof("MSG %d %d", msg.Type, len(msg.Blocks))
-				bytes, err := json.Marshal(&msg)
-				n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
-				if err != nil {
-					processWriteError(err)
-				}
-				_ = rw.Flush()
-				logger.Infof("%d...%d (%d bytes) > %s (seq=%d)", firstId, nextId, n, id, msg.SeqNo)
+	// for {
+	select {
+	case msg := <-xSyncChan:
+		switch msg.Type {
+		case setupReq:
+			logger.Infof("RCVD %s", msg)
+			if msg.FromId > uint64(localHeight) {
+				processProtocolError("illegal ask: > max_height")
 			}
+			if msg.ToId > uint64(localHeight) {
+				msg.ToId = uint64(localHeight)
+			}
+			if msg.Count > blockBatchSize {
+				msg.Count = uint32(blockBatchSize)
+			}
+			msg.Type = setupAck
+			bytes, err := json.Marshal(&msg)
+			if err != nil {
+				processMarshalError(err)
+			}
+			_, err = rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+			if err != nil {
+				processWriteError(err)
+			}
+			_ = rw.Flush()
+			logger.Infof("ACKD %s", msg)
 
-		case aux := <-quit:
-			logger.Info("quit")
-			return errors.New("stopped: " + aux)
+		case setupCnf:
+			nextId = int64(msg.FromId)
+			logger.Infof("NEGD %s", msg)
 
-		case err := <-quitWithError:
-			logger.Info("quit with error")
-			return err
+		case blocksReq:
+			if msg.FromId == 0 {
+				// nextId += 1
+			} else {
+				nextId = int64(msg.FromId)
+			}
+			logger.Infof("ASKD: %d -> %d, count=%d", msg.FromId, nextId, msg.Count)
+			msg.Type = blocksResp
+			firstId := nextId
+			for i := 0; i < int(msg.Count); i++ {
+				block, err := getBlock(db, uint(nextId))
+				if err != nil {
+					logger.Warn("Error getting block: ", err)
+					quit <- "error getting block"
+				}
+				logger.Debugf("Packed block %d %d", nextId, block.Id)
+				msg.Blocks = append(msg.Blocks, *block)
+				nextId += 1
+			}
+			logger.Infof("MSG %d %d", msg.Type, len(msg.Blocks))
+			bytes, err := json.Marshal(&msg)
+			n, err := rw.WriteString(fmt.Sprintf("%s\n", string(bytes)))
+			if err != nil {
+				processWriteError(err)
+			}
+			_ = rw.Flush()
+			logger.Infof("%d...%d (%d bytes) > %s (seq=%d)", firstId, nextId, n, id, msg.SeqNo)
 		}
-		runtime.Gosched()
+
+	case aux := <-quit:
+		logger.Info("quit")
+		return errors.New("stopped: " + aux)
+
+	case err := <-quitWithError:
+		logger.Info("quit with error")
+		return err
 	}
+
+	return nil
+	// runtime.Gosched()
+	// }
 }
 
 func streamBlocks(ctx context.Context) {
