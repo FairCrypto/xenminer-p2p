@@ -62,6 +62,11 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		logger.Warnf("protocol err: %s", aux)
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
+	defer func() {
+		close(quitReading)
+		close(quit)
+		close(quitWithError)
+	}()
 
 	go func() {
 		var xSyncRequest XSyncMessage
@@ -76,6 +81,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				str, err := rw.ReadString('\n')
 				if err != nil {
 					processReadError(err)
+					quitReading <- struct{}{}
 					quit <- "read error"
 				}
 				if len(str) == 1 {
@@ -87,8 +93,8 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 					quit <- "read error"
 				}
 				xSyncChan <- xSyncRequest
-				runtime.Gosched()
 			}
+			runtime.Gosched()
 		}
 	}()
 
@@ -154,10 +160,12 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 
 		case aux := <-quit:
 			quitReading <- struct{}{}
+			logger.Info("quit")
 			return errors.New("stopped: " + aux)
 
 		case err := <-quitWithError:
 			quitReading <- struct{}{}
+			logger.Info("quit with error")
 			return err
 		}
 		runtime.Gosched()

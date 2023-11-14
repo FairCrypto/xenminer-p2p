@@ -147,6 +147,7 @@ func processBlockHeight(ctx context.Context) {
 	logger := ctx.Value("logger").(log0.EventLogger)
 	state := ctx.Value("state").(*NetworkState)
 
+	quitReceiving := make(chan struct{})
 	quit := make(chan struct{})
 	xSyncChan := make(chan XSyncMessage)
 
@@ -219,16 +220,18 @@ func processBlockHeight(ctx context.Context) {
 			go func() {
 				for {
 					select {
-					case <-quit:
+					case <-quitReceiving:
 						err = conn.Close()
 						logger.Info("Stopping the receiver", err)
 						receiving = false
+						close(quitReceiving)
 						return
 
 					default:
 						msgStr, err := rw.ReadString('\n')
 						if err != nil {
 							logger.Warn("read err: ", err)
+							quitReceiving <- struct{}{}
 							quit <- struct{}{}
 						}
 						if len(msgStr) == 1 {
@@ -262,9 +265,12 @@ func processBlockHeight(ctx context.Context) {
 					select {
 					case <-quit:
 						logger.Info("Quitting the proto")
+						quitReceiving <- struct{}{}
+						close(quit)
 						_ = conn.Close()
-						receiving = false
+						//receiving = false
 						return
+
 					case xMsg := <-xSyncChan:
 						logger.Infof("inc msg %s", xMsg.Type)
 						switch xMsg.Type {
@@ -337,7 +343,8 @@ func processBlockHeight(ctx context.Context) {
 							}
 							if xMsg.SeqNo == -1 {
 								logger.Info("Complete")
-								receiving = false
+								quitReceiving <- struct{}{}
+								// receiving = false
 								quit <- struct{}{}
 								// return
 							}
