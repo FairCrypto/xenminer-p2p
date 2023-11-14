@@ -39,7 +39,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	quitReading := make(chan struct{})
 	quit := make(chan string)
 	quitWithError := make(chan error)
-	xSyncChan := make(chan XSyncMessage)
+	xSyncChan := make(chan XSyncMessage, 1)
 	closing := false
 	defer func() {
 		logger.Info("Closing Reader")
