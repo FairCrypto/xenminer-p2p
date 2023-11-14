@@ -369,9 +369,9 @@ func processBlockHeight(ctx context.Context) {
 				}
 				// }
 			}
+
 			go doReceive(quitReceiving)
 			go doSend(quit)
-
 		}
 
 		if maxBlockHeight == localHeight {

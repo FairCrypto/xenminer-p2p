@@ -85,32 +85,30 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	doReceive := func(quitReading chan struct{}) {
 		var xSyncRequest XSyncMessage
 		logger.Info("Processing requests")
-		// for {
-		select {
-		case <-quitReading:
-			logger.Info("Done processing requests")
-			return
+		for {
+			select {
+			case <-quitReading:
+				logger.Info("Done processing requests")
+				return
 
-		default:
-			str, err := rw.ReadString('\n')
-			if err != nil {
-				processReadError(err)
-				// quitReading <- struct{}{}
-				// quit <- "read error"
-			}
-			if len(str) == 1 {
-				// break
-			} else {
-				err = json.Unmarshal([]byte(str), &xSyncRequest)
+			default:
+				str, err := rw.ReadString('\n')
 				if err != nil {
-					processUnmarshalError(err)
+					processReadError(err)
+					// quitReading <- struct{}{}
 					// quit <- "read error"
 				}
-				xSyncChan <- xSyncRequest
+				if len(str) > 1 {
+					err = json.Unmarshal([]byte(str), &xSyncRequest)
+					if err != nil {
+						processUnmarshalError(err)
+						// quit <- "read error"
+					}
+					xSyncChan <- xSyncRequest
+				}
 			}
-			// runtime.Gosched()
+			runtime.Gosched()
 		}
-		// }
 	}
 
 	go doReceive(quitReading)
