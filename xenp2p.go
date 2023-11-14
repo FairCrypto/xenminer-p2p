@@ -228,9 +228,7 @@ func processBlockHeight(ctx context.Context) {
 
 			receiving = true
 			doReceive := func(quitReceiving chan struct{}) {
-				defer func() {
-
-				}()
+				defer func() {}()
 
 				// for {
 				select {

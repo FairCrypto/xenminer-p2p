@@ -81,7 +81,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
 
-	go func() {
+	doReceive := func(quitReading chan struct{}) {
 		var xSyncRequest XSyncMessage
 		logger.Info("Processing requests")
 		// for {
@@ -110,7 +110,9 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			// runtime.Gosched()
 		}
 		// }
-	}()
+	}
+
+	go doReceive(quitReading)
 
 	// for {
 	select {
