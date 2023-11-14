@@ -40,35 +40,41 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 	quit := make(chan string, 1)
 	quitWithError := make(chan error, 1)
 	xSyncChan := make(chan XSyncMessage, 1)
+	defer func() {
+		close(quitReading)
+		close(quit)
+		close(quitWithError)
+		close(xSyncChan)
+	}()
 
 	nextId := int64(0)
 	localHeight := getCurrentHeight(db)
 
 	processReadError := func(err error) {
 		logger.Warn("read err: ", err)
+		quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processWriteError := func(err error) {
 		logger.Warn("write err: ", err)
+		quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processMarshalError := func(err error) {
 		logger.Warn("marshal err: ", err)
+		quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processUnmarshalError := func(err error) {
 		logger.Warn("unmarshal err: ", err)
+		quitReading <- struct{}{}
 		quitWithError <- err
 	}
 	processProtocolError := func(aux string) {
 		logger.Warnf("protocol err: %s", aux)
+		quitReading <- struct{}{}
 		quitWithError <- errors.New(fmt.Sprintf("proto err: %s", aux))
 	}
-	defer func() {
-		close(quitReading)
-		close(quit)
-		close(quitWithError)
-	}()
 
 	go func() {
 		var xSyncRequest XSyncMessage
@@ -83,8 +89,8 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				str, err := rw.ReadString('\n')
 				if err != nil {
 					processReadError(err)
-					quitReading <- struct{}{}
-					quit <- "read error"
+					// quitReading <- struct{}{}
+					// quit <- "read error"
 				}
 				if len(str) == 1 {
 					continue
@@ -92,7 +98,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				err = json.Unmarshal([]byte(str), &xSyncRequest)
 				if err != nil {
 					processUnmarshalError(err)
-					quit <- "read error"
+					// quit <- "read error"
 				}
 				xSyncChan <- xSyncRequest
 			}
@@ -161,12 +167,10 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			}
 
 		case aux := <-quit:
-			quitReading <- struct{}{}
 			logger.Info("quit")
 			return errors.New("stopped: " + aux)
 
 		case err := <-quitWithError:
-			quitReading <- struct{}{}
 			logger.Info("quit with error")
 			return err
 		}
