@@ -155,12 +155,6 @@ func processBlockHeight(ctx context.Context) {
 	var negotiatedBatchCount = uint32(blockBatchSize)
 	var receiving = false
 
-	defer func() {
-		close(quitReceiving)
-		close(quit)
-		close(xSyncChan)
-	}()
-
 	for {
 		msg, err := subs.blockHeight.Next(ctx)
 		if msg.ReceivedFrom.String() == peerId {
@@ -231,8 +225,9 @@ func processBlockHeight(ctx context.Context) {
 				for {
 					select {
 					case <-quitReceiving:
+						logger.Info("Stopping the receiver")
 						err = conn.Close()
-						logger.Info("Stopping the receiver", err)
+						logger.Info("Receiver stopped: ", err)
 						receiving = false
 						return
 
@@ -356,6 +351,7 @@ func processBlockHeight(ctx context.Context) {
 							if xMsg.SeqNo == -1 {
 								logger.Info("Complete")
 								close(quitReceiving)
+								time.Sleep(time.Second)
 								close(quit)
 								// quitReceiving <- struct{}{}
 								// receiving = false
