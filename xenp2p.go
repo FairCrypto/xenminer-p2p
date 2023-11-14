@@ -228,45 +228,44 @@ func processBlockHeight(ctx context.Context) {
 
 			receiving = true
 			doReceive := func(quitReceiving chan struct{}) {
-				defer func() {}()
+				for {
+					select {
+					case <-quitReceiving:
+						err = conn.Close()
+						logger.Info("Stopping the receiver", err)
+						receiving = false
+						return
 
-				// for {
-				select {
-				case <-quitReceiving:
-					err = conn.Close()
-					logger.Info("Stopping the receiver", err)
-					receiving = false
-					return
-
-				default:
-					msgStr, err := rw.ReadString('\n')
-					if err != nil {
-						logger.Warn("read err: ", err)
-						quitReceiving <- struct{}{}
-					}
-					if len(msgStr) != 1 {
-						err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
+					default:
+						msgStr, err := rw.ReadString('\n')
 						if err != nil {
-							logger.Warn("Err in unmarshall: ", err)
-							break
+							logger.Warn("read err: ", err)
+							quitReceiving <- struct{}{}
 						}
-						if xSyncRequest.Count < 1 {
-							logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
-							// break
+						if len(msgStr) != 1 {
+							err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
+							if err != nil {
+								logger.Warn("Err in unmarshall: ", err)
+								break
+							}
+							if xSyncRequest.Count < 1 {
+								logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
+								// break
+							}
+							if xSyncRequest.FromId != uint64(localHeight)+1 {
+								logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
+								// break
+							}
+							if xSyncRequest.ToId <= uint64(localHeight) {
+								logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
+								// break
+							}
+							xSyncChan <- xSyncRequest
+							//
 						}
-						if xSyncRequest.FromId != uint64(localHeight)+1 {
-							logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
-							// break
-						}
-						if xSyncRequest.ToId <= uint64(localHeight) {
-							logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
-							// break
-						}
-						xSyncChan <- xSyncRequest
-						// runtime.Gosched()
 					}
+					runtime.Gosched()
 				}
-				// }
 			}
 
 			doSend := func(quit chan struct{}) {
