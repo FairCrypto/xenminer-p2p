@@ -276,6 +276,7 @@ func processBlockHeight(ctx context.Context) {
 				for {
 					select {
 					case <-quit:
+						close(quitReceiving)
 						closing = true
 						return
 
