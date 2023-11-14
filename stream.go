@@ -35,6 +35,7 @@ type XSyncMessage struct {
 
 func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logger log0.EventLogger) error {
 	db := ctx.Value("db").(*sql.DB)
+	quitReading := make(chan struct{})
 	quit := make(chan string)
 	quitWithError := make(chan error)
 	nextId := int64(0)
@@ -67,17 +68,15 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 		logger.Info("Processing requests")
 		for {
 			select {
-			case <-quit:
+			case <-quitReading:
 				logger.Info("Done processing requests")
 				return
-			case <-quitWithError:
-				logger.Info("Done processing requests")
-				return
+
 			default:
 				str, err := rw.ReadString('\n')
 				if err != nil {
 					processReadError(err)
-					return
+					quit <- "read error"
 				}
 				if len(str) == 1 {
 					continue
@@ -85,7 +84,7 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 				err = json.Unmarshal([]byte(str), &xSyncRequest)
 				if err != nil {
 					processUnmarshalError(err)
-					return
+					quit <- "read error"
 				}
 				xSyncChan <- xSyncRequest
 				runtime.Gosched()
@@ -154,9 +153,11 @@ func decodeRequests(ctx context.Context, rw *bufio.ReadWriter, id peer.ID, logge
 			}
 
 		case aux := <-quit:
+			quitReading <- struct{}{}
 			return errors.New("stopped: " + aux)
 
 		case err := <-quitWithError:
+			quitReading <- struct{}{}
 			return err
 		}
 		runtime.Gosched()
