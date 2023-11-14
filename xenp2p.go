@@ -188,7 +188,7 @@ func processBlockHeight(ctx context.Context) {
 
 			quitReceiving = make(chan struct{})
 			quit = make(chan struct{})
-			xSyncChan = make(chan XSyncMessage)
+			xSyncChan = make(chan XSyncMessage, 1)
 
 			conn, err := h.NewStream(ctx, msg.GetFrom(), blockSyncProto)
 			if err != nil {
