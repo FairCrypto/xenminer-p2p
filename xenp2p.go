@@ -299,8 +299,8 @@ func processBlockHeight(ctx context.Context) {
 							_ = rw.Flush()
 
 							delta = uint(xMsg.ToId - xMsg.FromId)
-							// totalBatches := uint32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
-							totalBatches := int32(2)
+							totalBatches := int32(math.Ceil(float64(delta / uint(negotiatedBatchCount))))
+							// totalBatches := int32(2)
 							logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
 
 							for batchNo := int32(0); batchNo < totalBatches; batchNo++ {
