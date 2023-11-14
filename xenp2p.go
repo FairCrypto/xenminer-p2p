@@ -233,7 +233,9 @@ func processBlockHeight(ctx context.Context) {
 				for {
 					select {
 					case <-quitReceiving:
-						quit <- struct{}{}
+						if receiving {
+							quit <- struct{}{}
+						}
 						return
 
 					default:
