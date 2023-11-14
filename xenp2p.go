@@ -221,6 +221,7 @@ func processBlockHeight(ctx context.Context) {
 			logger.Infof("REQD %s", xSyncRequest)
 
 			receiving = true
+			closing := false
 			doReceive := func(quitReceiving chan struct{}) {
 				for {
 					select {
@@ -233,11 +234,11 @@ func processBlockHeight(ctx context.Context) {
 
 					default:
 						msgStr, err := rw.ReadString('\n')
-						if err != nil {
+						if err != nil && !closing {
 							logger.Warn("read err: ", err)
 							quitReceiving <- struct{}{}
 						}
-						if len(msgStr) != 1 {
+						if len(msgStr) != 1 && !closing {
 							err = json.Unmarshal([]byte(msgStr), &xSyncRequest)
 							if err != nil {
 								logger.Warn("Err in unmarshall: ", err)
@@ -348,6 +349,7 @@ func processBlockHeight(ctx context.Context) {
 								}
 							}
 							if xMsg.SeqNo == -1 {
+								closing = true
 								logger.Info("Complete")
 								_ = conn.Close()
 								close(quitReceiving)
