@@ -224,7 +224,6 @@ func processBlockHeight(ctx context.Context) {
 			closing := false
 			doReceive := func(quitReceiving chan struct{}) {
 				defer func() {
-					logger.Info("Stopping the receiver")
 					err = conn.Close()
 					logger.Info("Receiver stopped: ", err)
 					if !closing {
@@ -255,11 +254,11 @@ func processBlockHeight(ctx context.Context) {
 								logger.Warnf("XSync params don't fit: count=%d (%s)", xSyncRequest.Count)
 								// break
 							}
-							if xSyncRequest.FromId != uint64(localHeight)+1 {
+							if xSyncRequest.Type == setupAck && xSyncRequest.FromId != uint64(localHeight)+1 {
 								logger.Warnf("XSync params don't fit: from=%d <> local=%d (%s)", xSyncRequest.FromId, localHeight+1)
 								// break
 							}
-							if xSyncRequest.ToId <= uint64(localHeight) {
+							if xSyncRequest.Type == setupAck && xSyncRequest.ToId <= uint64(localHeight) {
 								logger.Warnf("XSync params don't fit: to=%d > local=%d (%s)", xSyncRequest.ToId, localHeight)
 								// break
 							}
@@ -300,6 +299,9 @@ func processBlockHeight(ctx context.Context) {
 
 							delta = uint(xMsg.ToId - xMsg.FromId)
 							totalBatches := int32(math.Floor(float64(delta/uint(negotiatedBatchCount)))) + 1
+							if totalBatches == 1 {
+								negotiatedBatchCount = uint32(delta)
+							}
 							// totalBatches := int32(2)
 							logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
 
