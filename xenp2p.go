@@ -300,7 +300,7 @@ func processBlockHeight(ctx context.Context) {
 							delta = uint(xMsg.ToId - xMsg.FromId)
 							totalBatches := int32(math.Floor(float64(delta/uint(negotiatedBatchCount)))) + 1
 							if totalBatches == 1 {
-								negotiatedBatchCount = uint32(delta)
+								negotiatedBatchCount = uint32(delta) + 1
 							}
 							// totalBatches := int32(2)
 							logger.Infof("Negotiated count=%d batches=%d", negotiatedBatchCount, totalBatches)
